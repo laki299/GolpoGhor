@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-// পরে স্ক্রিনগুলো ইমপোর্ট করা হবে
-// import '../features/auth/presentation/screens/login_screen.dart';
-// import '../features/home/presentation/screens/home_feed_screen.dart';
-// ইত্যাদি...
+import '../features/auth/presentation/screens/login_screen.dart';
+import '../features/auth/presentation/screens/register_screen.dart';
+import '../features/home/presentation/screens/home_feed_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -26,24 +24,17 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/',
       name: 'home',
-      builder: (context, state) => const Scaffold(
-        body: Center(child: Text('Home Feed - Coming Soon')),
-      ),
+      builder: (context, state) => const HomeFeedScreen(),
     ),
     GoRoute(
       path: '/login',
       name: 'login',
-      builder: (context, state) => const Scaffold(
-        body: Center(child: Text('Login Screen - Coming Soon')),
-      ),
+      builder: (context, state) => const LoginScreen(),
     ),
     GoRoute(
       path: '/register',
       name: 'register',
-      builder: (context, state) => const Scaffold(
-        body: Center(child: Text('Register Screen - Coming Soon')),
-      ),
+      builder: (context, state) => const RegisterScreen(),
     ),
-    // পরে আরও রুট যোগ করা হবে
   ],
 );
