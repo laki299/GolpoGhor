@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/models/story_model.dart';
-import '../../../../core/models/content_block_model.dart';
 import '../../../../core/services/story_service.dart';
+import '../../../../core/services/reaction_service.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/constants/reaction_types.dart';
+import '../../../social/presentation/widgets/reaction_picker.dart';
+import '../../../social/presentation/widgets/comment_section.dart';
 
 class StoryReaderScreen extends ConsumerStatefulWidget {
   final String storyId;
@@ -19,9 +20,12 @@ class StoryReaderScreen extends ConsumerStatefulWidget {
 
 class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
   final _storyService = StoryService();
+  final _reactionService = ReactionService();
+
   StoryModel? _story;
   bool _isLoading = true;
   String? _error;
+  String? _userReaction;
 
   @override
   void initState() {
@@ -32,8 +36,13 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
   Future<void> _loadStory() async {
     try {
       final story = await _storyService.getStoryById(widget.storyId);
+      final reaction = await _reactionService.getUserReaction(
+        storyId: widget.storyId,
+      );
+
       setState(() {
         _story = story;
+        _userReaction = reaction;
         _isLoading = false;
       });
     } catch (e) {
@@ -42,6 +51,77 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _showReactionPicker() {
+    ReactionPicker.show(
+      context,
+      current: _userReaction,
+      onSelected: (type) async {
+        try {
+          await _reactionService.toggleReaction(
+            reactionType: type,
+            storyId: widget.storyId,
+          );
+
+          // UI আপডেট
+          setState(() {
+            if (_userReaction == type) {
+              _userReaction = null; // toggle off
+            } else {
+              _userReaction = type;
+            }
+          });
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('রিয়্যাকশন দিতে সমস্যা হয়েছে')),
+            );
+          }
+        }
+      },
+    );
+  }
+
+  void _showComments() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          builder: (_, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Expanded(
+                    child: CommentSection(storyId: widget.storyId),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -68,9 +148,7 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
         ],
       ),
       body: _buildBody(isDark),
-      bottomNavigationBar: _story == null
-          ? null
-          : _buildBottomBar(isDark),
+      bottomNavigationBar: _story == null ? null : _buildBottomBar(isDark),
     );
   }
 
@@ -216,71 +294,76 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
       child: SafeArea(
         child: Row(
           children: [
-            _BottomAction(
-              icon: Icons.favorite_border,
-              label: 'রিয়্যাকশন',
-              onTap: () {
-                // TODO: Show reaction bottom sheet
-              },
+            // Reaction Button
+            InkWell(
+              onTap: _showReactionPicker,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      _userReaction != null
+                          ? Icons.favorite
+                          : Icons.favorite_border,
+                      size: 22,
+                      color: _userReaction != null
+                          ? Colors.redAccent
+                          : (isDark
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'রিয়্যাকশন',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(width: 24),
-            _BottomAction(
-              icon: Icons.chat_bubble_outline,
-              label: 'কমেন্ট',
-              onTap: () {
-                // TODO: Open comments
-              },
+
+            // Comment Button
+            InkWell(
+              onTap: _showComments,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline,
+                      size: 22,
+                      color: isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'কমেন্ট',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
+
             const Spacer(),
+
             IconButton(
               icon: const Icon(Icons.share_outlined),
               onPressed: () {},
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _BottomAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 22,
-              color: isDark
-                  ? AppColors.darkTextSecondary
-                  : AppColors.lightTextSecondary,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary,
-              ),
             ),
           ],
         ),
