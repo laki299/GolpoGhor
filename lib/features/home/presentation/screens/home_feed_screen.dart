@@ -103,15 +103,11 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () {
-              // TODO: Navigate to Search
-            },
+            onPressed: () => context.push('/search'),
           ),
           IconButton(
             icon: const Icon(Icons.person_outline),
-            onPressed: () {
-              // TODO: Navigate to Profile
-            },
+            onPressed: () => context.push('/profile'),
           ),
         ],
       ),
