@@ -5,7 +5,6 @@ import '../models/reading_progress_model.dart';
 class ReadingProgressService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  /// Save or update reading progress
   Future<void> saveProgress({
     String? storyId,
     String? episodeId,
@@ -13,10 +12,8 @@ class ReadingProgressService {
   }) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) return;
-
     if (storyId == null && episodeId == null) return;
 
-    // আগে থেকে আছে কিনা চেক
     var query = _client
         .from(SupabaseConstants.readingProgress)
         .select()
@@ -34,7 +31,7 @@ class ReadingProgressService {
       await _client
           .from(SupabaseConstants.readingProgress)
           .update({
-            'progress_percent': progressPercent,
+            'progress_percent': progressPercent.clamp(0.0, 100.0),
             'last_read_at': DateTime.now().toIso8601String(),
           })
           .eq('id', existing['id']);
@@ -43,13 +40,12 @@ class ReadingProgressService {
         'user_id': userId,
         'story_id': storyId,
         'episode_id': episodeId,
-        'progress_percent': progressPercent,
+        'progress_percent': progressPercent.clamp(0.0, 100.0),
         'last_read_at': DateTime.now().toIso8601String(),
       });
     }
   }
 
-  /// Get progress for a story/episode
   Future<ReadingProgressModel?> getProgress({
     String? storyId,
     String? episodeId,
