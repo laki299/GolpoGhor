@@ -19,6 +19,7 @@ class EpisodeReaderScreen extends ConsumerStatefulWidget {
 class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
   final _novelService = NovelService();
   EpisodeModel? _episode;
+  List<EpisodeModel> _allEpisodes = [];
   bool _isLoading = true;
   String? _error;
 
@@ -31,8 +32,19 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
   Future<void> _loadEpisode() async {
     try {
       final episode = await _novelService.getEpisodeById(widget.episodeId);
+      if (episode == null) {
+        setState(() {
+          _error = 'পর্ব পাওয়া যায়নি';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final episodes = await _novelService.getEpisodes(episode.novelId);
+
       setState(() {
         _episode = episode;
+        _allEpisodes = episodes;
         _isLoading = false;
       });
     } catch (e) {
@@ -40,6 +52,26 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
         _error = 'পর্ব লোড করতে সমস্যা হয়েছে';
         _isLoading = false;
       });
+    }
+  }
+
+  void _goToPrevious() {
+    if (_episode == null) return;
+    final currentIndex =
+        _allEpisodes.indexWhere((e) => e.id == _episode!.id);
+    if (currentIndex > 0) {
+      final prev = _allEpisodes[currentIndex - 1];
+      context.pushReplacement('/episode/${prev.id}');
+    }
+  }
+
+  void _goToNext() {
+    if (_episode == null) return;
+    final currentIndex =
+        _allEpisodes.indexWhere((e) => e.id == _episode!.id);
+    if (currentIndex < _allEpisodes.length - 1) {
+      final next = _allEpisodes[currentIndex + 1];
+      context.pushReplacement('/episode/${next.id}');
     }
   }
 
@@ -58,9 +90,7 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
             : null,
       ),
       body: _buildBody(isDark),
-      bottomNavigationBar: _episode == null
-          ? null
-          : _buildNavigationBar(isDark),
+      bottomNavigationBar: _episode == null ? null : _buildNavigationBar(isDark),
     );
   }
 
@@ -92,7 +122,6 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
             ),
           ),
           const SizedBox(height: 24),
-
           ...ep.contentBlocks.map((block) {
             if (block.isText) {
               return Padding(
@@ -138,8 +167,13 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
   }
 
   Widget _buildNavigationBar(bool isDark) {
+    final currentIndex =
+        _allEpisodes.indexWhere((e) => e.id == _episode!.id);
+    final hasPrevious = currentIndex > 0;
+    final hasNext = currentIndex < _allEpisodes.length - 1;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
         border: Border(
@@ -153,23 +187,16 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             TextButton.icon(
-              onPressed: () {
-                // TODO: Previous episode
-              },
+              onPressed: hasPrevious ? _goToPrevious : null,
               icon: const Icon(Icons.arrow_back_ios, size: 16),
               label: const Text('পূর্বের পর্ব'),
             ),
             TextButton(
-              onPressed: () {
-                // TODO: Episode list
-                context.pop();
-              },
+              onPressed: () => context.pop(),
               child: const Text('পর্ব তালিকা'),
             ),
             TextButton.icon(
-              onPressed: () {
-                // TODO: Next episode
-              },
+              onPressed: hasNext ? _goToNext : null,
               icon: const Icon(Icons.arrow_forward_ios, size: 16),
               label: const Text('পরের পর্ব'),
             ),
