@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/models/story_model.dart';
+import '../../../../core/models/novel_model.dart';
 import '../../../../core/services/story_service.dart';
+import '../../../../core/constants/supabase_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../widgets/story_card.dart';
+import '../widgets/novel_card.dart';
 
 class HomeFeedScreen extends ConsumerStatefulWidget {
   const HomeFeedScreen({super.key});
@@ -15,9 +19,10 @@ class HomeFeedScreen extends ConsumerStatefulWidget {
 
 class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
   final _storyService = StoryService();
+  final _client = Supabase.instance.client;
   final _scrollController = ScrollController();
 
-  List<StoryModel> _stories = [];
+  List<dynamic> _feedItems = []; // StoryModel বা NovelModel
   bool _isLoading = true;
   bool _isLoadingMore = false;
   String? _error;
@@ -57,8 +62,42 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
 
     try {
       final stories = await _storyService.getFeed(limit: _limit, offset: 0);
+
+      // Novel গুলোও নিয়ে আসি
+      final novelData = await _client
+          .from(SupabaseConstants.novels)
+          .select('''
+            *,
+            profiles:author_id (
+              full_name,
+              username,
+              avatar_url
+            )
+          ''')
+          .eq('is_published', true)
+          .order('created_at', ascending: false)
+          .limit(10);
+
+      final novels = (novelData as List).map((json) {
+        final map = Map<String, dynamic>.from(json);
+        if (map['profiles'] != null) {
+          map['author_name'] = map['profiles']['full_name'];
+          map['author_username'] = map['profiles']['username'];
+          map['author_avatar'] = map['profiles']['avatar_url'];
+        }
+        return NovelModel.fromJson(map);
+      }).toList();
+
+      // দুটো মিলিয়ে সময় অনুসারে সাজাই
+      final combined = <dynamic>[...stories, ...novels];
+      combined.sort((a, b) {
+        final aDate = a is StoryModel ? a.createdAt : (a as NovelModel).createdAt;
+        final bDate = b is StoryModel ? b.createdAt : (b as NovelModel).createdAt;
+        return bDate.compareTo(aDate);
+      });
+
       setState(() {
-        _stories = stories;
+        _feedItems = combined;
         _offset = stories.length;
         _hasMore = stories.length >= _limit;
         _isLoading = false;
@@ -73,14 +112,13 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
 
   Future<void> _loadMore() async {
     if (_isLoadingMore || !_hasMore) return;
-
     setState(() => _isLoadingMore = true);
 
     try {
       final moreStories =
           await _storyService.getFeed(limit: _limit, offset: _offset);
       setState(() {
-        _stories.addAll(moreStories);
+        _feedItems.addAll(moreStories);
         _offset += moreStories.length;
         _hasMore = moreStories.length >= _limit;
         _isLoadingMore = false;
@@ -114,7 +152,32 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
       body: _buildBody(isDark),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          context.push('/create-story');
+          showModalBottomSheet(
+            context: context,
+            builder: (ctx) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.article_outlined),
+                    title: const Text('নতুন গল্প লিখুন'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.push('/create-story');
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.menu_book_outlined),
+                    title: const Text('নতুন উপন্যাস শুরু করুন'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.push('/create-novel');
+                    },
+                  ),
+                ],
+              ),
+            ),
+          );
         },
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.edit, color: Colors.white),
@@ -143,7 +206,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
       );
     }
 
-    if (_stories.isEmpty) {
+    if (_feedItems.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -156,15 +219,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                   : AppColors.lightTextSecondary,
             ),
             const SizedBox(height: 16),
-            Text(
-              'এখনো কোনো গল্প নেই',
-              style: TextStyle(
-                fontSize: 16,
-                color: isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary,
-              ),
-            ),
+            const Text('এখনো কোনো গল্প নেই'),
             const SizedBox(height: 8),
             const Text(
               'প্রথম গল্পটি আপনিই লিখুন!',
@@ -180,28 +235,30 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
       child: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.only(top: 8, bottom: 80),
-        itemCount: _stories.length + (_isLoadingMore ? 1 : 0),
+        itemCount: _feedItems.length + (_isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
-          if (index == _stories.length) {
+          if (index == _feedItems.length) {
             return const Padding(
               padding: EdgeInsets.all(16),
               child: Center(child: CircularProgressIndicator()),
             );
           }
 
-          final story = _stories[index];
-          return StoryCard(
-            story: story,
-            onTap: () {
-              context.push('/story/${story.id}');
-            },
-            onCommentTap: () {
-              // TODO: Open comments
-            },
-            onReactionTap: () {
-              // TODO: Show reaction picker
-            },
-          );
+          final item = _feedItems[index];
+
+          if (item is StoryModel) {
+            return StoryCard(
+              story: item,
+              onTap: () => context.push('/story/${item.id}'),
+            );
+          } else if (item is NovelModel) {
+            return NovelCard(
+              novel: item,
+              onTap: () => context.push('/novel/${item.id}'),
+            );
+          }
+
+          return const SizedBox.shrink();
         },
       ),
     );
