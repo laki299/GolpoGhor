@@ -10,6 +10,9 @@ import '../features/novel/presentation/screens/create_novel_screen.dart';
 import '../features/novel/presentation/screens/novel_details_screen.dart';
 import '../features/novel/presentation/screens/add_episode_screen.dart';
 import '../features/novel/presentation/screens/episode_reader_screen.dart';
+import '../features/profile/presentation/screens/user_profile_screen.dart';
+import '../features/profile/presentation/screens/my_works_screen.dart';
+import '../features/search/presentation/screens/search_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -83,6 +86,21 @@ final appRouter = GoRouter(
         final id = state.pathParameters['id']!;
         return EpisodeReaderScreen(episodeId: id);
       },
+    ),
+    GoRoute(
+      path: '/profile',
+      name: 'profile',
+      builder: (context, state) => const UserProfileScreen(),
+    ),
+    GoRoute(
+      path: '/my-works',
+      name: 'my-works',
+      builder: (context, state) => const MyWorksScreen(),
+    ),
+    GoRoute(
+      path: '/search',
+      name: 'search',
+      builder: (context, state) => const SearchScreen(),
     ),
   ],
 );
