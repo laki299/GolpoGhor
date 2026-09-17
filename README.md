@@ -29,3 +29,38 @@
 5. `flutter run`
 
 ## Folder Structure
+
+lib/
+├── core/
+│   ├── constants/
+│   ├── models/
+│   ├── services/
+│   └── theme/
+├── features/
+│   ├── auth/
+│   ├── home/
+│   ├── story/
+│   ├── novel/
+│   ├── profile/
+│   ├── search/
+│   └── social/
+└── routing/
+
+## Database Tables
+
+- profiles
+- stories
+- novels
+- episodes
+- comments
+- reactions
+- follows
+- bookmarks
+- reading_progress
+
+## Notes
+
+- Video সম্পূর্ণ নিষিদ্ধ
+- Comment-এ শুধু Text + Emoji
+- Episode Number automatic
+- Image automatic compress হয়
