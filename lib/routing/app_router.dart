@@ -6,6 +6,10 @@ import '../features/auth/presentation/screens/register_screen.dart';
 import '../features/home/presentation/screens/home_feed_screen.dart';
 import '../features/story/presentation/screens/story_reader_screen.dart';
 import '../features/story/presentation/screens/create_story_screen.dart';
+import '../features/novel/presentation/screens/create_novel_screen.dart';
+import '../features/novel/presentation/screens/novel_details_screen.dart';
+import '../features/novel/presentation/screens/add_episode_screen.dart';
+import '../features/novel/presentation/screens/episode_reader_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -50,6 +54,35 @@ final appRouter = GoRouter(
       path: '/create-story',
       name: 'create-story',
       builder: (context, state) => const CreateStoryScreen(),
+    ),
+    GoRoute(
+      path: '/create-novel',
+      name: 'create-novel',
+      builder: (context, state) => const CreateNovelScreen(),
+    ),
+    GoRoute(
+      path: '/novel/:id',
+      name: 'novel-details',
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return NovelDetailsScreen(novelId: id);
+      },
+    ),
+    GoRoute(
+      path: '/add-episode/:novelId',
+      name: 'add-episode',
+      builder: (context, state) {
+        final novelId = state.pathParameters['novelId']!;
+        return AddEpisodeScreen(novelId: novelId);
+      },
+    ),
+    GoRoute(
+      path: '/episode/:id',
+      name: 'episode-reader',
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return EpisodeReaderScreen(episodeId: id);
+      },
     ),
   ],
 );
