@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../features/auth/presentation/screens/login_screen.dart';
 import '../features/auth/presentation/screens/register_screen.dart';
 import '../features/home/presentation/screens/home_feed_screen.dart';
+import '../features/story/presentation/screens/story_reader_screen.dart';
+import '../features/story/presentation/screens/create_story_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -35,6 +37,19 @@ final appRouter = GoRouter(
       path: '/register',
       name: 'register',
       builder: (context, state) => const RegisterScreen(),
+    ),
+    GoRoute(
+      path: '/story/:id',
+      name: 'story-reader',
+      builder: (context, state) {
+        final storyId = state.pathParameters['id']!;
+        return StoryReaderScreen(storyId: storyId);
+      },
+    ),
+    GoRoute(
+      path: '/create-story',
+      name: 'create-story',
+      builder: (context, state) => const CreateStoryScreen(),
     ),
   ],
 );
