@@ -6,9 +6,11 @@ import '../features/auth/presentation/screens/register_screen.dart';
 import '../features/home/presentation/screens/home_feed_screen.dart';
 import '../features/story/presentation/screens/story_reader_screen.dart';
 import '../features/story/presentation/screens/create_story_screen.dart';
+import '../features/story/presentation/screens/edit_story_screen.dart';
 import '../features/novel/presentation/screens/create_novel_screen.dart';
 import '../features/novel/presentation/screens/novel_details_screen.dart';
 import '../features/novel/presentation/screens/add_episode_screen.dart';
+import '../features/novel/presentation/screens/edit_episode_screen.dart';
 import '../features/novel/presentation/screens/episode_reader_screen.dart';
 import '../features/profile/presentation/screens/user_profile_screen.dart';
 import '../features/profile/presentation/screens/my_works_screen.dart';
@@ -59,6 +61,14 @@ final appRouter = GoRouter(
       builder: (context, state) => const CreateStoryScreen(),
     ),
     GoRoute(
+      path: '/edit-story/:id',
+      name: 'edit-story',
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return EditStoryScreen(storyId: id);
+      },
+    ),
+    GoRoute(
       path: '/create-novel',
       name: 'create-novel',
       builder: (context, state) => const CreateNovelScreen(),
@@ -77,6 +87,14 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final novelId = state.pathParameters['novelId']!;
         return AddEpisodeScreen(novelId: novelId);
+      },
+    ),
+    GoRoute(
+      path: '/edit-episode/:id',
+      name: 'edit-episode',
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return EditEpisodeScreen(episodeId: id);
       },
     ),
     GoRoute(
