@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/models/user_model.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -130,8 +129,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                     _ProfileMenuItem(
                       icon: Icons.edit_outlined,
                       title: 'প্রোফাইল এডিট করুন',
-                      onTap: () {
-                        // TODO: Edit Profile
+                      onTap: () async {
+                        final updated = await context.push('/edit-profile');
+                        if (updated == true) {
+                          _loadProfile(); // রিফ্রেশ
+                        }
                       },
                     ),
                     _ProfileMenuItem(
@@ -142,9 +144,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                     _ProfileMenuItem(
                       icon: Icons.bookmark_outline,
                       title: 'সংরক্ষিত গল্প',
-                      onTap: () {
-                        // TODO: Saved / Bookmarks
-                      },
+                      onTap: () => context.push('/saved'),
                     ),
                     _ProfileMenuItem(
                       icon: Icons.history,
