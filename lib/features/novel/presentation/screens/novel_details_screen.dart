@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/models/novel_model.dart';
 import '../../../../core/models/episode_model.dart';
 import '../../../../core/services/novel_service.dart';
+import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class NovelDetailsScreen extends ConsumerStatefulWidget {
@@ -18,10 +19,13 @@ class NovelDetailsScreen extends ConsumerStatefulWidget {
 
 class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
   final _novelService = NovelService();
+  final _bookmarkService = BookmarkService();
+
   NovelModel? _novel;
   List<EpisodeModel> _episodes = [];
   bool _isLoading = true;
   String? _error;
+  bool _isBookmarked = false;
 
   @override
   void initState() {
@@ -33,9 +37,12 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
     try {
       final novel = await _novelService.getNovelById(widget.novelId);
       final episodes = await _novelService.getEpisodes(widget.novelId);
+      final bookmarked = await _bookmarkService.isBookmarked(novelId: widget.novelId);
+
       setState(() {
         _novel = novel;
         _episodes = episodes;
+        _isBookmarked = bookmarked;
         _isLoading = false;
       });
     } catch (e) {
@@ -58,8 +65,25 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.bookmark_border),
-            onPressed: () {},
+            icon: Icon(
+              _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+              color: _isBookmarked ? AppColors.primary : null,
+            ),
+            onPressed: () async {
+              await _bookmarkService.toggleBookmark(novelId: widget.novelId);
+              setState(() => _isBookmarked = !_isBookmarked);
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      _isBookmarked ? 'সংরক্ষণ করা হয়েছে' : 'সংরক্ষণ সরানো হয়েছে',
+                    ),
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+              }
+            },
           ),
         ],
       ),
