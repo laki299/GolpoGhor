@@ -13,7 +13,9 @@ import '../features/novel/presentation/screens/add_episode_screen.dart';
 import '../features/novel/presentation/screens/edit_episode_screen.dart';
 import '../features/novel/presentation/screens/episode_reader_screen.dart';
 import '../features/profile/presentation/screens/user_profile_screen.dart';
+import '../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../features/profile/presentation/screens/my_works_screen.dart';
+import '../features/profile/presentation/screens/saved_stories_screen.dart';
 import '../features/search/presentation/screens/search_screen.dart';
 
 final appRouter = GoRouter(
@@ -111,9 +113,19 @@ final appRouter = GoRouter(
       builder: (context, state) => const UserProfileScreen(),
     ),
     GoRoute(
+      path: '/edit-profile',
+      name: 'edit-profile',
+      builder: (context, state) => const EditProfileScreen(),
+    ),
+    GoRoute(
       path: '/my-works',
       name: 'my-works',
       builder: (context, state) => const MyWorksScreen(),
+    ),
+    GoRoute(
+      path: '/saved',
+      name: 'saved',
+      builder: (context, state) => const SavedStoriesScreen(),
     ),
     GoRoute(
       path: '/search',
