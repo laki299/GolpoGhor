@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/models/story_model.dart';
 import '../../../../core/services/story_service.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -117,7 +118,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
       body: _buildBody(isDark),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // TODO: Navigate to Create Story
+          context.push('/create-story');
         },
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.edit, color: Colors.white),
@@ -196,7 +197,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
           return StoryCard(
             story: story,
             onTap: () {
-              // TODO: Navigate to Story Reader
+              context.push('/story/${story.id}');
             },
             onCommentTap: () {
               // TODO: Open comments
