@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/models/story_model.dart';
 import '../../../../core/services/story_service.dart';
 import '../../../../core/services/reaction_service.dart';
+import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../social/presentation/widgets/reaction_picker.dart';
 import '../../../social/presentation/widgets/comment_section.dart';
@@ -21,11 +22,13 @@ class StoryReaderScreen extends ConsumerStatefulWidget {
 class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
   final _storyService = StoryService();
   final _reactionService = ReactionService();
+  final _bookmarkService = BookmarkService();
 
   StoryModel? _story;
   bool _isLoading = true;
   String? _error;
   String? _userReaction;
+  bool _isBookmarked = false;
 
   @override
   void initState() {
@@ -39,10 +42,14 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
       final reaction = await _reactionService.getUserReaction(
         storyId: widget.storyId,
       );
+      final bookmarked = await _bookmarkService.isBookmarked(
+        storyId: widget.storyId,
+      );
 
       setState(() {
         _story = story;
         _userReaction = reaction;
+        _isBookmarked = bookmarked;
         _isLoading = false;
       });
     } catch (e) {
@@ -136,9 +143,24 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.bookmark_border),
-            onPressed: () {
-              // TODO: Bookmark
+            icon: Icon(
+              _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+              color: _isBookmarked ? AppColors.primary : null,
+            ),
+            onPressed: () async {
+              await _bookmarkService.toggleBookmark(storyId: widget.storyId);
+              setState(() => _isBookmarked = !_isBookmarked);
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      _isBookmarked ? 'সংরক্ষণ করা হয়েছে' : 'সংরক্ষণ সরানো হয়েছে',
+                    ),
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+              }
             },
           ),
           IconButton(
