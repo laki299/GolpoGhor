@@ -27,55 +27,19 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
   final _bookmarkService = BookmarkService();
   final _followService = FollowService();
   final _progressService = ReadingProgressService();
-  final _scrollController = ScrollController();
 
   StoryModel? _story;
   bool _isLoading = true;
   String? _error;
+
   String? _userReaction;
   bool _isBookmarked = false;
   bool _isFollowing = false;
-  bool _isOwnStory = false;
 
   @override
   void initState() {
     super.initState();
     _loadStory();
-    _scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void dispose() {
-    _saveReadingProgress();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    // স্ক্রল অনুসারে প্রগ্রেস আপডেট (ঐচ্ছিক)
-    if (_scrollController.hasClients && _scrollController.position.maxScrollExtent > 0) {
-      final percent = (_scrollController.offset /
-              _scrollController.position.maxScrollExtent) *
-          100;
-      // খুব ঘন ঘন সেভ না করে শুধু মনে রাখা যায়
-    }
-  }
-
-  Future<void> _saveReadingProgress() async {
-    if (_story == null) return;
-    try {
-      double percent = 0.0;
-      if (_scrollController.hasClients &&
-          _scrollController.position.maxScrollExtent > 0) {
-        percent = (_scrollController.offset /
-                _scrollController.position.maxScrollExtent) *
-            100;
-      }
-      await _progressService.saveProgress(
-        storyId: widget.storyId,
-        progressPercent: percent,
-      );
-    } catch (_) {}
   }
 
   Future<void> _loadStory() async {
@@ -89,18 +53,15 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
         return;
       }
 
-      final userId = Supabase.instance.client.auth.currentUser?.id;
       final reaction = await _reactionService.getUserReaction(
         storyId: widget.storyId,
       );
       final bookmarked = await _bookmarkService.isBookmarked(
         storyId: widget.storyId,
       );
-      final following = userId != null && userId != story.authorId
-          ? await _followService.isFollowing(story.authorId)
-          : false;
+      final following = await _followService.isFollowing(story.authorId);
 
-      // গল্প খোলার পর প্রগ্রেস সেভ
+      // Reading progress সেভ (খোলা হয়েছে)
       await _progressService.saveProgress(
         storyId: widget.storyId,
         progressPercent: 0.0,
@@ -111,7 +72,6 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
         _userReaction = reaction;
         _isBookmarked = bookmarked;
         _isFollowing = following;
-        _isOwnStory = userId == story.authorId;
         _isLoading = false;
       });
     } catch (e) {
@@ -132,6 +92,7 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
             reactionType: type,
             storyId: widget.storyId,
           );
+
           setState(() {
             if (_userReaction == type) {
               _userReaction = null;
@@ -191,8 +152,33 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
     );
   }
 
+  Future<void> _toggleBookmark() async {
+    try {
+      await _bookmarkService.toggleBookmark(storyId: widget.storyId);
+      setState(() => _isBookmarked = !_isBookmarked);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _isBookmarked ? 'সংরক্ষণ করা হয়েছে' : 'সংরক্ষণ সরানো হয়েছে',
+            ),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('সংরক্ষণ করতে সমস্যা হয়েছে')),
+        );
+      }
+    }
+  }
+
   Future<void> _toggleFollow() async {
-    if (_story == null || _isOwnStory) return;
+    if (_story == null) return;
+
     try {
       await _followService.toggleFollow(_story!.authorId);
       setState(() => _isFollowing = !_isFollowing);
@@ -206,34 +192,293 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
   }
 
   @override
-  void dispose() {
-    _saveReadingProgress();
-    _scrollController.dispose();
-    super.dispose();
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.pop(),
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(
+              _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+              color: _isBookmarked ? AppColors.primary : null,
+            ),
+            onPressed: _toggleBookmark,
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_vert),
+            onPressed: () {},
+          ),
+        ],
+      ),
+      body: _buildBody(isDark),
+      bottomNavigationBar: _story == null ? null : _buildBottomBar(isDark),
+    );
   }
 
-  Future<void> _saveReadingProgress() async {
-    if (_story == null) return;
-    try {
-      double percent = 0.0;
-      if (_scrollController.hasClients &&
-          _scrollController.position.maxScrollExtent > 0) {
-        percent = (_scrollController.offset /
-                _scrollController.position.maxScrollExtent) *
-            100;
-      }
-      await _progressService.saveProgress(
-        storyId: widget.storyId,
-        progressPercent: percent,
+  Widget _buildBody(bool isDark) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null || _story == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_error ?? 'গল্প পাওয়া যায়নি'),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadStory,
+              child: const Text('আবার চেষ্টা করুন'),
+            ),
+          ],
+        ),
       );
-    } catch (_) {}
+    }
+
+    final story = _story!;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title
+          Text(
+            story.title,
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              height: 1.35,
+              color: isDark
+                  ? AppColors.darkTextPrimary
+                  : AppColors.lightTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Author + Follow
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: AppColors.primary.withOpacity(0.15),
+                backgroundImage: story.authorAvatar != null
+                    ? CachedNetworkImageProvider(story.authorAvatar!)
+                    : null,
+                child: story.authorAvatar == null
+                    ? Text(
+                        (story.authorName ?? 'U')[0].toUpperCase(),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                          fontSize: 14,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      story.authorName ?? 'অজানা লেখক',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                    if (story.authorUsername != null)
+                      Text(
+                        '@${story.authorUsername}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              // Follow Button
+              SizedBox(
+                height: 34,
+                child: OutlinedButton(
+                  onPressed: _toggleFollow,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor:
+                        _isFollowing ? AppColors.primary : AppColors.primary,
+                    side: BorderSide(
+                      color: AppColors.primary,
+                      width: _isFollowing ? 1.2 : 1,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child: Text(
+                    _isFollowing ? 'আনফলো' : 'ফলো',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Content Blocks
+          ...story.contentBlocks.map((block) {
+            if (block.isText) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                  block.value,
+                  style: TextStyle(
+                    fontSize: 17,
+                    height: 1.75,
+                    color: isDark
+                        ? AppColors.darkTextPrimary
+                        : AppColors.lightTextPrimary,
+                  ),
+                ),
+              );
+            } else if (block.isImage) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: CachedNetworkImage(
+                    imageUrl: block.value,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      height: 200,
+                      color: isDark
+                          ? AppColors.darkSurface
+                          : AppColors.lightBorder,
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      height: 200,
+                      color: isDark
+                          ? AppColors.darkSurface
+                          : AppColors.lightBorder,
+                      child: const Icon(Icons.broken_image),
+                    ),
+                  ),
+                ),
+              );
+            }
+            return const SizedBox.shrink();
+          }),
+        ],
+      ),
+    );
   }
 
-  // --- নতুন state ভ্যারিয়েবল ---
-  final _followService = FollowService();
-  final _progressService = ReadingProgressService();
-  final _scrollController = ScrollController();
-  bool _isFollowing = false;
-  bool _isOwnStory = false;
+  Widget _buildBottomBar(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        border: Border(
+          top: BorderSide(
+            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+            width: 0.6,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            // Reaction
+            InkWell(
+              onTap: _showReactionPicker,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      _userReaction != null
+                          ? Icons.favorite
+                          : Icons.favorite_border,
+                      size: 22,
+                      color: _userReaction != null
+                          ? Colors.redAccent
+                          : (isDark
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'রিয়্যাকশন',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 20),
 
-  // ... (নিচের পুরো build ও অন্যান্য মেথড আগের মতোই থাকবে, শুধু Author Row-তে Follow বাটন যোগ করা হয়েছে)
+            // Comment
+            InkWell(
+              onTap: _showComments,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline,
+                      size: 22,
+                      color: isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'কমেন্ট',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const Spacer(),
+
+            IconButton(
+              icon: const Icon(Icons.share_outlined),
+              onPressed: () {},
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
