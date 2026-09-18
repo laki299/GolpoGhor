@@ -64,6 +64,33 @@ class CommentService {
   }
 
   // ======================
+  // Get Comments for Episode
+  // ======================
+  Future<List<CommentModel>> getEpisodeComments(String episodeId) async {
+    final data = await _client
+        .from(SupabaseConstants.comments)
+        .select('''
+          *,
+          profiles:user_id (
+            full_name,
+            avatar_url
+          )
+        ''')
+        .eq('episode_id', episodeId)
+        .isFilter('parent_id', null) // শুধু মূল কমেন্ট
+        .order('created_at', ascending: false);
+
+    return (data as List).map((json) {
+      final map = Map<String, dynamic>.from(json);
+      if (map['profiles'] != null) {
+        map['user_name'] = map['profiles']['full_name'];
+        map['user_avatar'] = map['profiles']['avatar_url'];
+      }
+      return CommentModel.fromJson(map);
+    }).toList();
+  }
+
+  // ======================
   // Get Replies of a Comment
   // ======================
   Future<List<CommentModel>> getReplies(String parentId) async {
