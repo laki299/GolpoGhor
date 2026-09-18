@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/models/story_model.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/constants/reaction_types.dart';
 
 class StoryCard extends StatelessWidget {
   final StoryModel story;
@@ -32,7 +31,7 @@ class StoryCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Author Row
+              // Author
               Row(
                 children: [
                   CircleAvatar(
@@ -97,7 +96,7 @@ class StoryCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
 
-              // Preview Text
+              // Preview
               Text(
                 story.previewText,
                 style: TextStyle(
@@ -112,7 +111,6 @@ class StoryCard extends StatelessWidget {
               ),
               const SizedBox(height: 6),
 
-              // See More
               Text(
                 'আরও পড়ুন',
                 style: TextStyle(
@@ -123,7 +121,7 @@ class StoryCard extends StatelessWidget {
               ),
               const SizedBox(height: 14),
 
-              // Action Row
+              // Actions
               Row(
                 children: [
                   _ActionButton(
