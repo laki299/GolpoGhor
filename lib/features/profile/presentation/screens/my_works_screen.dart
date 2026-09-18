@@ -159,7 +159,19 @@ class _MyWorksScreenState extends ConsumerState<MyWorksScreen>
                     : AppColors.lightTextSecondary,
               ),
             ),
-            trailing: const Icon(Icons.chevron_right),
+            trailing: PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'edit') {
+                  context.push('/edit-story/${story.id}');
+                } else if (value == 'view') {
+                  context.push('/story/${story.id}');
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'view', child: Text('দেখুন')),
+                const PopupMenuItem(value: 'edit', child: Text('এডিট করুন')),
+              ],
+            ),
             onTap: () => context.push('/story/${story.id}'),
           ),
         );
