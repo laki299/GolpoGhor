@@ -24,7 +24,8 @@ class _EditStoryScreenState extends ConsumerState<EditStoryScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _contentController = TextEditingController();
+  final _contentBeforeController = TextEditingController();
+  final _contentAfterController = TextEditingController();
 
   final _storyService = StoryService();
   final _storageService = StorageService();
@@ -36,6 +37,7 @@ class _EditStoryScreenState extends ConsumerState<EditStoryScreen> {
   String? _existingImageUrl;
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _imageInserted = false;
   bool _removeImage = false;
 
   @override
@@ -48,7 +50,8 @@ class _EditStoryScreenState extends ConsumerState<EditStoryScreen> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _contentController.dispose();
+    _contentBeforeController.dispose();
+    _contentAfterController.dispose();
     super.dispose();
   }
 
@@ -60,23 +63,35 @@ class _EditStoryScreenState extends ConsumerState<EditStoryScreen> {
         return;
       }
 
-      final textContent = story.contentBlocks
-          .where((b) => b.isText)
-          .map((b) => b.value)
-          .join('\n\n');
+      final texts = story.contentBlocks.where((b) => b.isText).toList();
+      final images = story.contentBlocks.where((b) => b.isImage).toList();
 
-      final imageBlock = story.contentBlocks.where((b) => b.isImage).toList();
+      String before = '';
+      String after = '';
+
+      if (images.isEmpty) {
+        before = texts.map((t) => t.value).join('\n\n');
+      } else {
+        // প্রথম image-এর আগের সব text = before, পরের = after
+        final imgIndex = story.contentBlocks.indexWhere((b) => b.isImage);
+        final beforeBlocks = story.contentBlocks.take(imgIndex).where((b) => b.isText);
+        final afterBlocks = story.contentBlocks.skip(imgIndex + 1).where((b) => b.isText);
+        before = beforeBlocks.map((t) => t.value).join('\n\n');
+        after = afterBlocks.map((t) => t.value).join('\n\n');
+        _existingImageUrl = images.first.value;
+        _imageInserted = true;
+      }
 
       setState(() {
         _story = story;
         _titleController.text = story.title;
         _descriptionController.text = story.description ?? '';
-        _contentController.text = textContent;
+        _contentBeforeController.text = before;
+        _contentAfterController.text = after;
         _selectedCategory = story.category;
-        _existingImageUrl = imageBlock.isNotEmpty ? imageBlock.first.value : null;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (_) {
       setState(() => _isLoading = false);
     }
   }
@@ -90,14 +105,50 @@ class _EditStoryScreenState extends ConsumerState<EditStoryScreen> {
     if (picked != null) {
       setState(() {
         _newImage = File(picked.path);
+        _imageInserted = true;
         _removeImage = false;
       });
     }
   }
 
+  void _clearImage() {
+    setState(() {
+      if (_contentAfterController.text.trim().isNotEmpty) {
+        final before = _contentBeforeController.text;
+        final after = _contentAfterController.text;
+        _contentBeforeController.text =
+            before.isEmpty ? after : '$before\n\n$after';
+        _contentAfterController.clear();
+      }
+      _newImage = null;
+      _existingImageUrl = null;
+      _imageInserted = false;
+      _removeImage = true;
+    });
+  }
+
+  List<ContentBlock> _buildBlocks({String? imageUrl}) {
+    final blocks = <ContentBlock>[];
+    final before = _contentBeforeController.text.trim();
+    final after = _contentAfterController.text.trim();
+
+    if (before.isNotEmpty) {
+      blocks.add(ContentBlock(type: 'text', value: before));
+    }
+    if (imageUrl != null) {
+      blocks.add(ContentBlock(type: 'image', value: imageUrl));
+    }
+    if (after.isNotEmpty) {
+      blocks.add(ContentBlock(type: 'text', value: after));
+    }
+    return blocks;
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_contentController.text.trim().isEmpty) {
+    final hasText = _contentBeforeController.text.trim().isNotEmpty ||
+        _contentAfterController.text.trim().isNotEmpty;
+    if (!hasText) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('গল্পের লেখা খালি রাখা যাবে না')),
       );
@@ -107,21 +158,16 @@ class _EditStoryScreenState extends ConsumerState<EditStoryScreen> {
     setState(() => _isSaving = true);
 
     try {
-      String? imageUrl = _existingImageUrl;
-
+      String? imageUrl;
       if (_removeImage) {
         imageUrl = null;
       } else if (_newImage != null) {
         imageUrl = await _storageService.uploadStoryImage(_newImage!);
+      } else {
+        imageUrl = _existingImageUrl;
       }
 
-      final blocks = <ContentBlock>[
-        ContentBlock(type: 'text', value: _contentController.text.trim()),
-      ];
-
-      if (imageUrl != null) {
-        blocks.add(ContentBlock(type: 'image', value: imageUrl));
-      }
+      final blocks = _buildBlocks(imageUrl: imageUrl);
 
       await _storyService.updateStory(
         storyId: widget.storyId,
@@ -154,17 +200,17 @@ class _EditStoryScreenState extends ConsumerState<EditStoryScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-
     if (_story == null) {
       return Scaffold(
         appBar: AppBar(),
         body: const Center(child: Text('গল্প পাওয়া যায়নি')),
       );
     }
+
+    final showImage = _imageInserted &&
+        ((_newImage != null) || (_existingImageUrl != null && !_removeImage));
 
     return Scaffold(
       appBar: AppBar(
@@ -208,7 +254,6 @@ class _EditStoryScreenState extends ConsumerState<EditStoryScreen> {
             ),
             const Divider(),
             const SizedBox(height: 12),
-
             DropdownButtonFormField<String>(
               value: _selectedCategory,
               decoration: const InputDecoration(
@@ -221,7 +266,6 @@ class _EditStoryScreenState extends ConsumerState<EditStoryScreen> {
               onChanged: (v) => setState(() => _selectedCategory = v),
             ),
             const SizedBox(height: 16),
-
             TextFormField(
               controller: _descriptionController,
               maxLines: 2,
@@ -230,19 +274,39 @@ class _EditStoryScreenState extends ConsumerState<EditStoryScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
-            // Image Section
-            if (_newImage != null) ...[
+            TextFormField(
+              controller: _contentBeforeController,
+              maxLines: null,
+              minLines: showImage ? 4 : 10,
+              style: const TextStyle(fontSize: 16, height: 1.6),
+              decoration: InputDecoration(
+                hintText: showImage
+                    ? 'ছবির আগের লেখা...'
+                    : 'গল্পের লেখা...',
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+              ),
+            ),
+            if (showImage) ...[
+              const SizedBox(height: 12),
               Stack(
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.file(
-                      _newImage!,
-                      width: double.infinity,
-                      height: 180,
-                      fit: BoxFit.cover,
-                    ),
+                    child: _newImage != null
+                        ? Image.file(
+                            _newImage!,
+                            width: double.infinity,
+                            height: 180,
+                            fit: BoxFit.cover,
+                          )
+                        : CachedNetworkImage(
+                            imageUrl: _existingImageUrl!,
+                            width: double.infinity,
+                            height: 180,
+                            fit: BoxFit.cover,
+                          ),
                   ),
                   Positioned(
                     top: 8,
@@ -253,67 +317,33 @@ class _EditStoryScreenState extends ConsumerState<EditStoryScreen> {
                       child: IconButton(
                         padding: EdgeInsets.zero,
                         icon: const Icon(Icons.close, color: Colors.white, size: 18),
-                        onPressed: () {
-                          setState(() {
-                            _newImage = null;
-                            _removeImage = true;
-                          });
-                        },
+                        onPressed: _clearImage,
                       ),
                     ),
                   ),
                 ],
               ),
-            ] else if (_existingImageUrl != null && !_removeImage) ...[
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: CachedNetworkImage(
-                      imageUrl: _existingImageUrl!,
-                      width: double.infinity,
-                      height: 180,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: CircleAvatar(
-                      backgroundColor: Colors.black54,
-                      radius: 16,
-                      child: IconButton(
-                        padding: EdgeInsets.zero,
-                        icon: const Icon(Icons.close, color: Colors.white, size: 18),
-                        onPressed: () {
-                          setState(() => _removeImage = true);
-                        },
-                      ),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _contentAfterController,
+                maxLines: null,
+                minLines: 6,
+                style: const TextStyle(fontSize: 16, height: 1.6),
+                decoration: const InputDecoration(
+                  hintText: 'ছবির পরের লেখা...',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                ),
               ),
             ] else ...[
+              const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _pickImage,
                 icon: const Icon(Icons.image_outlined),
                 label: const Text('ছবি যোগ করুন (সর্বোচ্চ ১টি)'),
               ),
             ],
-            const SizedBox(height: 20),
-
-            TextFormField(
-              controller: _contentController,
-              maxLines: null,
-              minLines: 12,
-              style: const TextStyle(fontSize: 16, height: 1.6),
-              decoration: const InputDecoration(
-                hintText: 'গল্পের লেখা...',
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-              ),
-            ),
             const SizedBox(height: 40),
           ],
         ),
