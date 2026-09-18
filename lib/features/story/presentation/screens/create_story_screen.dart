@@ -20,11 +20,13 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _contentController = TextEditingController();
+  final _contentBeforeController = TextEditingController(); // ছবির আগের লেখা
+  final _contentAfterController = TextEditingController();  // ছবির পরের লেখা
 
   String? _selectedCategory;
   File? _selectedImage;
   bool _isPublishing = false;
+  bool _imageInserted = false; // ছবি যোগ করা হয়েছে কিনা
 
   final _storyService = StoryService();
   final _storageService = StorageService();
@@ -34,7 +36,8 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _contentController.dispose();
+    _contentBeforeController.dispose();
+    _contentAfterController.dispose();
     super.dispose();
   }
 
@@ -45,14 +48,63 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
       imageQuality: 85,
     );
     if (picked != null) {
-      setState(() => _selectedImage = File(picked.path));
+      setState(() {
+        _selectedImage = File(picked.path);
+        _imageInserted = true;
+      });
     }
+  }
+
+  void _removeImage() {
+    setState(() {
+      // ছবির পরের লেখা আগের লেখার সাথে মিলিয়ে দিই
+      if (_contentAfterController.text.trim().isNotEmpty) {
+        final before = _contentBeforeController.text;
+        final after = _contentAfterController.text;
+        _contentBeforeController.text = before.isEmpty
+            ? after
+            : '$before\n\n$after';
+        _contentAfterController.clear();
+      }
+      _selectedImage = null;
+      _imageInserted = false;
+    });
+  }
+
+  List<ContentBlock> _buildBlocks({String? imageUrl}) {
+    final blocks = <ContentBlock>[];
+
+    final before = _contentBeforeController.text.trim();
+    final after = _contentAfterController.text.trim();
+
+    if (before.isNotEmpty) {
+      blocks.add(ContentBlock(type: 'text', value: before));
+    }
+
+    if (imageUrl != null) {
+      blocks.add(ContentBlock(type: 'image', value: imageUrl));
+    }
+
+    if (after.isNotEmpty) {
+      blocks.add(ContentBlock(type: 'text', value: after));
+    }
+
+    // ছবি না থাকলে শুধু before (বা সব একসাথে)
+    if (imageUrl == null && before.isEmpty && after.isEmpty) {
+      // খালি
+    } else if (imageUrl == null && after.isNotEmpty && before.isEmpty) {
+      blocks.add(ContentBlock(type: 'text', value: after));
+    }
+
+    return blocks;
   }
 
   Future<void> _save({required bool isDraft}) async {
     if (!isDraft) {
       if (!_formKey.currentState!.validate()) return;
-      if (_contentController.text.trim().isEmpty) {
+      final hasText = _contentBeforeController.text.trim().isNotEmpty ||
+          _contentAfterController.text.trim().isNotEmpty;
+      if (!hasText) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('গল্পের মূল লেখা লিখুন')),
         );
@@ -68,13 +120,7 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
         imageUrl = await _storageService.uploadStoryImage(_selectedImage!);
       }
 
-      final blocks = <ContentBlock>[
-        if (_contentController.text.trim().isNotEmpty)
-          ContentBlock(type: 'text', value: _contentController.text.trim()),
-      ];
-      if (imageUrl != null) {
-        blocks.add(ContentBlock(type: 'image', value: imageUrl));
-      }
+      final blocks = _buildBlocks(imageUrl: imageUrl);
 
       if (isDraft) {
         await _storyService.saveDraft(
@@ -119,8 +165,6 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('নতুন গল্প'),
@@ -143,10 +187,7 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
                   )
                 : const Text(
                     'প্রকাশ করুন',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
           ),
         ],
@@ -156,61 +197,62 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // Title
             TextFormField(
               controller: _titleController,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               decoration: const InputDecoration(
                 hintText: 'গল্পের শিরোনাম',
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'শিরোনাম আবশ্যক';
-                }
-                return null;
-              },
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'শিরোনাম আবশ্যক' : null,
             ),
             const Divider(),
             const SizedBox(height: 8),
 
-            // Category
             DropdownButtonFormField<String>(
               value: _selectedCategory,
               decoration: const InputDecoration(
                 labelText: 'ক্যাটাগরি',
                 prefixIcon: Icon(Icons.category_outlined),
               ),
-              items: AppConstants.categories.map((cat) {
-                return DropdownMenuItem(
-                  value: cat,
-                  child: Text(cat),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() => _selectedCategory = value);
-              },
+              items: AppConstants.categories
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedCategory = v),
             ),
             const SizedBox(height: 16),
 
-            // Description (optional)
             TextFormField(
               controller: _descriptionController,
               maxLines: 2,
               decoration: const InputDecoration(
                 labelText: 'সংক্ষিপ্ত বিবরণ (ঐচ্ছিক)',
-                alignLabelWithHint: true,
               ),
             ),
             const SizedBox(height: 20),
 
-            // Image Picker
-            if (_selectedImage != null) ...[
+            // ===== ছবির আগের লেখা =====
+            TextFormField(
+              controller: _contentBeforeController,
+              maxLines: null,
+              minLines: _imageInserted ? 4 : 10,
+              style: const TextStyle(fontSize: 16, height: 1.6),
+              decoration: InputDecoration(
+                hintText: _imageInserted
+                    ? 'ছবির আগের লেখা (ঐচ্ছিক)...'
+                    : 'এখানে গল্প লিখুন... ছবি মাঝে বা শেষে যোগ করতে পারবেন',
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+              ),
+            ),
+
+            // ===== ছবি =====
+            if (_imageInserted && _selectedImage != null) ...[
+              const SizedBox(height: 12),
               Stack(
                 children: [
                   ClipRRect(
@@ -227,46 +269,63 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
                     right: 8,
                     child: CircleAvatar(
                       backgroundColor: Colors.black54,
+                      radius: 16,
                       child: IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white, size: 20),
-                        onPressed: () {
-                          setState(() => _selectedImage = null);
-                        },
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(Icons.close, color: Colors.white, size: 18),
+                        onPressed: _removeImage,
                       ),
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 8),
+              Text(
+                '↑ ছবি এখানে বসবে (আগের ও পরের লেখার মাঝে)',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.primary,
+                ),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 12),
+
+              // ===== ছবির পরের লেখা =====
+              TextFormField(
+                controller: _contentAfterController,
+                maxLines: null,
+                minLines: 6,
+                style: const TextStyle(fontSize: 16, height: 1.6),
+                decoration: const InputDecoration(
+                  hintText: 'ছবির পরের লেখা লিখুন...',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                ),
+              ),
             ] else ...[
+              const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _pickImage,
                 icon: const Icon(Icons.image_outlined),
-                label: const Text('ছবি যোগ করুন (সর্বোচ্চ ১টি)'),
+                label: const Text('ছবি যোগ করুন (যেকোনো জায়গায় — সর্বোচ্চ ১টি)'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+              Text(
+                'টিপস: আগে কিছু লিখে ছবি দিলে → ছবি মাঝে যাবে\n'
+                'শুধু ছবি দিলে → ছবি শুরুতে\n'
+                'লেখা শেষে ছবি দিলে → ছবি শেষে',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? AppColors.darkTextSecondary
+                      : AppColors.lightTextSecondary,
+                ),
+              ),
             ],
-
-            // Content
-            TextFormField(
-              controller: _contentController,
-              maxLines: null,
-              minLines: 12,
-              style: const TextStyle(
-                fontSize: 16,
-                height: 1.6,
-              ),
-              decoration: const InputDecoration(
-                hintText: 'এখানে আপনার গল্প লিখুন...',
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                alignLabelWithHint: true,
-              ),
-            ),
             const SizedBox(height: 40),
           ],
         ),
