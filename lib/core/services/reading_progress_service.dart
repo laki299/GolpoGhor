@@ -14,6 +14,8 @@ class ReadingProgressService {
     if (userId == null) return;
     if (storyId == null && episodeId == null) return;
 
+    final percent = progressPercent.clamp(0.0, 100.0);
+
     var query = _client
         .from(SupabaseConstants.readingProgress)
         .select()
@@ -28,19 +30,16 @@ class ReadingProgressService {
     final existing = await query.maybeSingle();
 
     if (existing != null) {
-      await _client
-          .from(SupabaseConstants.readingProgress)
-          .update({
-            'progress_percent': progressPercent.clamp(0.0, 100.0),
-            'last_read_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', existing['id']);
+      await _client.from(SupabaseConstants.readingProgress).update({
+        'progress_percent': percent,
+        'last_read_at': DateTime.now().toIso8601String(),
+      }).eq('id', existing['id']);
     } else {
       await _client.from(SupabaseConstants.readingProgress).insert({
         'user_id': userId,
         'story_id': storyId,
         'episode_id': episodeId,
-        'progress_percent': progressPercent.clamp(0.0, 100.0),
+        'progress_percent': percent,
         'last_read_at': DateTime.now().toIso8601String(),
       });
     }
@@ -69,5 +68,20 @@ class ReadingProgressService {
     final data = await query.maybeSingle();
     if (data == null) return null;
     return ReadingProgressModel.fromJson(data);
+  }
+
+  Future<List<ReadingProgressModel>> getAllProgress() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return [];
+
+    final data = await _client
+        .from(SupabaseConstants.readingProgress)
+        .select()
+        .eq('user_id', userId)
+        .order('last_read_at', ascending: false);
+
+    return (data as List)
+        .map((e) => ReadingProgressModel.fromJson(e))
+        .toList();
   }
 }
