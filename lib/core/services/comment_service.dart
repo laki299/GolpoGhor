@@ -5,9 +5,6 @@ import '../models/comment_model.dart';
 class CommentService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  // ======================
-  // Add Comment / Reply
-  // ======================
   Future<CommentModel> addComment({
     required String content,
     String? storyId,
@@ -36,21 +33,15 @@ class CommentService {
     return CommentModel.fromJson(data);
   }
 
-  // ======================
-  // Get Comments for Story
-  // ======================
   Future<List<CommentModel>> getStoryComments(String storyId) async {
     final data = await _client
         .from(SupabaseConstants.comments)
         .select('''
           *,
-          profiles:user_id (
-            full_name,
-            avatar_url
-          )
+          profiles:user_id (full_name, avatar_url)
         ''')
         .eq('story_id', storyId)
-        .isFilter('parent_id', null) // শুধু মূল কমেন্ট
+        .isFilter('parent_id', null)
         .order('created_at', ascending: false);
 
     return (data as List).map((json) {
@@ -63,21 +54,15 @@ class CommentService {
     }).toList();
   }
 
-  // ======================
-  // Get Comments for Episode
-  // ======================
   Future<List<CommentModel>> getEpisodeComments(String episodeId) async {
     final data = await _client
         .from(SupabaseConstants.comments)
         .select('''
           *,
-          profiles:user_id (
-            full_name,
-            avatar_url
-          )
+          profiles:user_id (full_name, avatar_url)
         ''')
         .eq('episode_id', episodeId)
-        .isFilter('parent_id', null) // শুধু মূল কমেন্ট
+        .isFilter('parent_id', null)
         .order('created_at', ascending: false);
 
     return (data as List).map((json) {
@@ -90,18 +75,12 @@ class CommentService {
     }).toList();
   }
 
-  // ======================
-  // Get Replies of a Comment
-  // ======================
   Future<List<CommentModel>> getReplies(String parentId) async {
     final data = await _client
         .from(SupabaseConstants.comments)
         .select('''
           *,
-          profiles:user_id (
-            full_name,
-            avatar_url
-          )
+          profiles:user_id (full_name, avatar_url)
         ''')
         .eq('parent_id', parentId)
         .order('created_at', ascending: true);
@@ -116,13 +95,7 @@ class CommentService {
     }).toList();
   }
 
-  // ======================
-  // Delete Comment
-  // ======================
   Future<void> deleteComment(String commentId) async {
-    await _client
-        .from(SupabaseConstants.comments)
-        .delete()
-        .eq('id', commentId);
+    await _client.from(SupabaseConstants.comments).delete().eq('id', commentId);
   }
 }
