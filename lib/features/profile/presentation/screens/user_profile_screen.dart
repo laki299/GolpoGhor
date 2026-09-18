@@ -17,11 +17,10 @@ class UserProfileScreen extends ConsumerStatefulWidget {
 class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   final _authService = AuthService();
   final _followService = FollowService();
-
   UserModel? _profile;
+  bool _isLoading = true;
   int _followerCount = 0;
   int _followingCount = 0;
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -34,27 +33,20 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     if (profile != null) {
       final followers = await _followService.getFollowerCount(profile.id);
       final following = await _followService.getFollowingCount(profile.id);
-      
-      if (mounted) {
-        setState(() {
-          _profile = profile;
-          _followerCount = followers;
-          _followingCount = following;
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _profile = profile;
+        _followerCount = followers;
+        _followingCount = following;
+        _isLoading = false;
+      });
     } else {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _logout() async {
     await _authService.signOut();
-    if (mounted) {
-      context.go('/login');
-    }
+    if (mounted) context.go('/login');
   }
 
   @override
@@ -67,9 +59,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () {
-              // TODO: Settings
-            },
+            onPressed: () {},
           ),
         ],
       ),
@@ -80,7 +70,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               : ListView(
                   padding: const EdgeInsets.all(20),
                   children: [
-                    // Avatar + Name
                     Center(
                       child: Column(
                         children: [
@@ -124,6 +113,15 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                               ),
                             ),
                           ],
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _CountItem(count: _followerCount, label: 'ফলোয়ার'),
+                              const SizedBox(width: 32),
+                              _CountItem(count: _followingCount, label: 'ফলোইং'),
+                            ],
+                          ),
                           if (_profile!.bio != null &&
                               _profile!.bio!.isNotEmpty) ...[
                             const SizedBox(height: 12),
@@ -138,36 +136,27 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                               ),
                             ),
                           ],
-                          const SizedBox(height: 16),
-                          // Follower and Following Count
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _CountItem(count: _followerCount, label: 'ফলোয়ার'),
-                              const SizedBox(width: 32),
-                              _CountItem(count: _followingCount, label: 'ফলোইং'),
-                            ],
-                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 32),
-
-                    // Menu Items
                     _ProfileMenuItem(
                       icon: Icons.edit_outlined,
                       title: 'প্রোফাইল এডিট করুন',
                       onTap: () async {
                         final updated = await context.push('/edit-profile');
-                        if (updated == true) {
-                          _loadProfile(); // রিফ্রেশ
-                        }
+                        if (updated == true) _loadProfile();
                       },
                     ),
                     _ProfileMenuItem(
                       icon: Icons.library_books_outlined,
                       title: 'আমার লেখা',
                       onTap: () => context.push('/my-works'),
+                    ),
+                    _ProfileMenuItem(
+                      icon: Icons.drafts_outlined,
+                      title: 'খসড়া',
+                      onTap: () => context.push('/drafts'),
                     ),
                     _ProfileMenuItem(
                       icon: Icons.bookmark_outline,
@@ -179,13 +168,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                       title: 'ডাউনলোড করা কনটেন্ট',
                       onTap: () => context.push('/offline'),
                     ),
-                    _ProfileMenuItem(
-                      icon: Icons.history,
-                      title: 'পড়ার ইতিহাস',
-                      onTap: () {
-                        // TODO: Reading History
-                      },
-                    ),
                     const Divider(height: 32),
                     _ProfileMenuItem(
                       icon: Icons.logout,
@@ -195,6 +177,36 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                     ),
                   ],
                 ),
+    );
+  }
+}
+
+class _CountItem extends StatelessWidget {
+  final int count;
+  final String label;
+
+  const _CountItem({required this.count, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      children: [
+        Text(
+          '$count',
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: isDark
+                ? AppColors.darkTextSecondary
+                : AppColors.lightTextSecondary,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -242,36 +254,3 @@ class _ProfileMenuItem extends StatelessWidget {
     );
   }
 }
-
-class _CountItem extends StatelessWidget {
-  final int count;
-  final String label;
-
-  const _CountItem({required this.count, required this.label});
-
-  @style
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          '$count',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            color: Theme.of(context).brightness == Brightness.dark
-                ? AppColors.darkTextSecondary
-                : AppColors.lightTextSecondary,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
