@@ -8,6 +8,7 @@ import '../features/home/presentation/screens/home_feed_screen.dart';
 import '../features/story/presentation/screens/story_reader_screen.dart';
 import '../features/story/presentation/screens/create_story_screen.dart';
 import '../features/story/presentation/screens/edit_story_screen.dart';
+import '../features/story/presentation/screens/drafts_screen.dart';
 import '../features/novel/presentation/screens/create_novel_screen.dart';
 import '../features/novel/presentation/screens/novel_details_screen.dart';
 import '../features/novel/presentation/screens/add_episode_screen.dart';
@@ -27,23 +28,16 @@ final appRouter = GoRouter(
     final isAuthRoute = state.matchedLocation == '/login' ||
         state.matchedLocation == '/register';
 
-    if (!isLoggedIn && !isAuthRoute) {
-      return '/login';
-    }
-    if (isLoggedIn && isAuthRoute) {
-      return '/';
-    }
+    if (!isLoggedIn && !isAuthRoute) return '/login';
+    if (isLoggedIn && isAuthRoute) return '/';
     return null;
   },
   routes: [
-    // Home
     GoRoute(
       path: '/',
       name: 'home',
       builder: (context, state) => const HomeFeedScreen(),
     ),
-
-    // Auth
     GoRoute(
       path: '/login',
       name: 'login',
@@ -54,8 +48,6 @@ final appRouter = GoRouter(
       name: 'register',
       builder: (context, state) => const RegisterScreen(),
     ),
-
-    // Story
     GoRoute(
       path: '/story/:id',
       name: 'story-reader',
@@ -77,8 +69,11 @@ final appRouter = GoRouter(
         return EditStoryScreen(storyId: id);
       },
     ),
-
-    // Novel
+    GoRoute(
+      path: '/drafts',
+      name: 'drafts',
+      builder: (context, state) => const DraftsScreen(),
+    ),
     GoRoute(
       path: '/create-novel',
       name: 'create-novel',
@@ -116,8 +111,6 @@ final appRouter = GoRouter(
         return EpisodeReaderScreen(episodeId: id);
       },
     ),
-
-    // Profile
     GoRoute(
       path: '/profile',
       name: 'profile',
@@ -138,19 +131,15 @@ final appRouter = GoRouter(
       name: 'saved',
       builder: (context, state) => const SavedStoriesScreen(),
     ),
-
-    // Search
-    GoRoute(
-      path: '/search',
-      name: 'search',
-      builder: (context, state) => const SearchScreen(),
-    ),
-
-    // Offline Downloads
     GoRoute(
       path: '/offline',
       name: 'offline',
       builder: (context, state) => const OfflineDownloadsScreen(),
+    ),
+    GoRoute(
+      path: '/search',
+      name: 'search',
+      builder: (context, state) => const SearchScreen(),
     ),
   ],
 );
