@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/models/episode_model.dart';
 import '../../../../core/services/novel_service.dart';
+import '../../../../core/services/offline_service.dart';
+import '../../../../core/services/reading_progress_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../social/presentation/widgets/comment_section.dart';
 
@@ -19,10 +21,15 @@ class EpisodeReaderScreen extends ConsumerStatefulWidget {
 
 class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
   final _novelService = NovelService();
+  final _offlineService = OfflineService();
+  final _progressService = ReadingProgressService();
+
   EpisodeModel? _episode;
   List<EpisodeModel> _allEpisodes = [];
   bool _isLoading = true;
   String? _error;
+  bool _isDownloaded = false;
+  double _progressPercent = 0;
 
   @override
   void initState() {
@@ -42,10 +49,22 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
       }
 
       final episodes = await _novelService.getEpisodes(episode.novelId);
+      final downloaded =
+          await _offlineService.isEpisodeDownloaded(widget.episodeId);
+      final progress = await _progressService.getProgress(
+        episodeId: widget.episodeId,
+      );
+
+      await _progressService.saveProgress(
+        episodeId: widget.episodeId,
+        progressPercent: progress?.progressPercent ?? 0,
+      );
 
       setState(() {
         _episode = episode;
         _allEpisodes = episodes;
+        _isDownloaded = downloaded;
+        _progressPercent = progress?.progressPercent ?? 0;
         _isLoading = false;
       });
     } catch (e) {
@@ -58,21 +77,38 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
 
   void _goToPrevious() {
     if (_episode == null) return;
-    final currentIndex =
-        _allEpisodes.indexWhere((e) => e.id == _episode!.id);
-    if (currentIndex > 0) {
-      final prev = _allEpisodes[currentIndex - 1];
-      context.pushReplacement('/episode/${prev.id}');
+    final i = _allEpisodes.indexWhere((e) => e.id == _episode!.id);
+    if (i > 0) {
+      context.pushReplacement('/episode/${_allEpisodes[i - 1].id}');
     }
   }
 
   void _goToNext() {
     if (_episode == null) return;
-    final currentIndex =
-        _allEpisodes.indexWhere((e) => e.id == _episode!.id);
-    if (currentIndex < _allEpisodes.length - 1) {
-      final next = _allEpisodes[currentIndex + 1];
-      context.pushReplacement('/episode/${next.id}');
+    final i = _allEpisodes.indexWhere((e) => e.id == _episode!.id);
+    if (i < _allEpisodes.length - 1) {
+      context.pushReplacement('/episode/${_allEpisodes[i + 1].id}');
+    }
+  }
+
+  Future<void> _toggleDownload() async {
+    if (_episode == null) return;
+    if (_isDownloaded) {
+      await _offlineService.removeEpisodeOffline(widget.episodeId);
+      setState(() => _isDownloaded = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ডাউনলোড সরানো হয়েছে')),
+        );
+      }
+    } else {
+      await _offlineService.saveEpisodeOffline(_episode!);
+      setState(() => _isDownloaded = true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('অফলাইনে সেভ হয়েছে')),
+        );
+      }
     }
   }
 
@@ -90,8 +126,9 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
             return Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
               ),
               child: Column(
                 children: [
@@ -129,10 +166,32 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
         title: _episode != null
             ? Text('পর্ব ${_episode!.episodeNumber}')
             : null,
+        actions: [
+          if (_progressPercent > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Center(
+                child: Text(
+                  '${_progressPercent.toInt()}%',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ),
+          IconButton(
+            icon: Icon(
+              _isDownloaded ? Icons.download_done : Icons.download_outlined,
+              color: _isDownloaded ? AppColors.primary : null,
+            ),
+            onPressed: _toggleDownload,
+          ),
+        ],
       ),
       body: _buildBody(isDark),
-      bottomNavigationBar:
-          _episode == null ? null : _buildNavigationBar(isDark),
+      bottomNavigationBar: _episode == null ? null : _buildBottomBar(isDark),
     );
   }
 
@@ -140,82 +199,100 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-
     if (_error != null || _episode == null) {
       return Center(child: Text(_error ?? 'পর্ব পাওয়া যায়নি'));
     }
 
     final ep = _episode!;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            ep.title,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              height: 1.35,
-              color: isDark
-                  ? AppColors.darkTextPrimary
-                  : AppColors.lightTextPrimary,
-            ),
-          ),
-          const SizedBox(height: 24),
-          ...ep.contentBlocks.map((block) {
-            if (block.isText) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Text(
-                  block.value,
-                  style: TextStyle(
-                    fontSize: 17,
-                    height: 1.75,
-                    color: isDark
-                        ? AppColors.darkTextPrimary
-                        : AppColors.lightTextPrimary,
-                  ),
-                ),
-              );
-            } else if (block.isImage) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: CachedNetworkImage(
-                    imageUrl: block.value,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) => Container(
-                      height: 200,
-                      color: isDark
-                          ? AppColors.darkSurface
-                          : AppColors.lightBorder,
-                      child: const Center(child: CircularProgressIndicator()),
-                    ),
-                    errorWidget: (_, __, ___) =>
-                        const Icon(Icons.broken_image, size: 48),
-                  ),
-                ),
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollUpdateNotification) {
+          final metrics = notification.metrics;
+          if (metrics.maxScrollExtent > 0) {
+            final percent =
+                (metrics.pixels / metrics.maxScrollExtent * 100).clamp(0, 100);
+            if ((percent - _progressPercent).abs() > 5) {
+              _progressPercent = percent.toDouble();
+              _progressService.saveProgress(
+                episodeId: widget.episodeId,
+                progressPercent: _progressPercent,
               );
             }
-            return const SizedBox.shrink();
-          }),
-        ],
+          }
+        }
+        return false;
+      },
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              ep.title,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                height: 1.35,
+                color: isDark
+                    ? AppColors.darkTextPrimary
+                    : AppColors.lightTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ...ep.contentBlocks.map((block) {
+              if (block.isText) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    block.value,
+                    style: TextStyle(
+                      fontSize: 17,
+                      height: 1.75,
+                      color: isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                );
+              } else if (block.isImage) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CachedNetworkImage(
+                      imageUrl: block.value,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(
+                        height: 200,
+                        color: isDark
+                            ? AppColors.darkSurface
+                            : AppColors.lightBorder,
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (_, __, ___) =>
+                          const Icon(Icons.broken_image, size: 48),
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            }),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildNavigationBar(bool isDark) {
+  Widget _buildBottomBar(bool isDark) {
     final currentIndex =
         _allEpisodes.indexWhere((e) => e.id == _episode!.id);
     final hasPrevious = currentIndex > 0;
     final hasNext = currentIndex < _allEpisodes.length - 1;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
         border: Border(
@@ -226,26 +303,25 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
       ),
       child: SafeArea(
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            IconButton(
+            TextButton.icon(
               onPressed: hasPrevious ? _goToPrevious : null,
-              icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-              tooltip: 'পূর্বের পর্ব',
+              icon: const Icon(Icons.arrow_back_ios, size: 14),
+              label: const Text('আগের', style: TextStyle(fontSize: 13)),
             ),
             IconButton(
               onPressed: _showComments,
               icon: const Icon(Icons.chat_bubble_outline, size: 22),
-              tooltip: 'কমেন্ট',
             ),
             TextButton(
               onPressed: () => context.pop(),
-              child: const Text('পর্ব তালিকা'),
+              child: const Text('তালিকা', style: TextStyle(fontSize: 13)),
             ),
-            IconButton(
+            const Spacer(),
+            TextButton.icon(
               onPressed: hasNext ? _goToNext : null,
-              icon: const Icon(Icons.arrow_forward_ios, size: 18),
-              tooltip: 'পরের পর্ব',
+              icon: const Icon(Icons.arrow_forward_ios, size: 14),
+              label: const Text('পরের', style: TextStyle(fontSize: 13)),
             ),
           ],
         ),
