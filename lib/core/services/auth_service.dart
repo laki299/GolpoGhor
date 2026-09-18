@@ -26,15 +26,20 @@ class AuthService {
       },
     );
 
-    // Profile তৈরি করে দিই
+    // Profile তৈরি
     if (response.user != null) {
-      await _client.from(SupabaseConstants.profiles).upsert({
-        'id': response.user!.id,
-        'full_name': fullName,
-        'username': username,
-        'created_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+      try {
+        await _client.from(SupabaseConstants.profiles).upsert({
+          'id': response.user!.id,
+          'full_name': fullName,
+          'username': username,
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+      } catch (e) {
+        // Profile তৈরি ব্যর্থ হলেও সাইনআপ সফল হতে পারে
+        print('Profile creation error: $e');
+      }
     }
 
     return response;
@@ -73,7 +78,26 @@ class AuthService {
         .eq('id', user.id)
         .maybeSingle();
 
-    if (data == null) return null;
+    if (data == null) {
+      // Profile না থাকলে তৈরি করে দিই
+      await _client.from(SupabaseConstants.profiles).upsert({
+        'id': user.id,
+        'full_name': user.userMetadata?['full_name'],
+        'username': user.userMetadata?['username'],
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+
+      final newData = await _client
+          .from(SupabaseConstants.profiles)
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (newData == null) return null;
+      return UserModel.fromJson(newData);
+    }
+
     return UserModel.fromJson(data);
   }
 
@@ -104,6 +128,5 @@ class AuthService {
         .eq('id', user.id);
   }
 
-  // Auth State Changes
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 }
