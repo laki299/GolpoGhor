@@ -7,7 +7,7 @@ class StoryService {
   final SupabaseClient _client = Supabase.instance.client;
 
   // ======================
-  // Create Story
+  // Create Story (Published)
   // ======================
   Future<StoryModel> createStory({
     required String title,
@@ -39,9 +39,71 @@ class StoryService {
   }
 
   // ======================
-  // Get Feed (Home)
+  // Save as Draft
   // ======================
-  Future<List<StoryModel>> getFeed({int limit = 20, int offset = 0}) async {
+  Future<StoryModel> saveDraft({
+    required String title,
+    String? description,
+    String? category,
+    List<String> tags = const [],
+    required List<ContentBlock> contentBlocks,
+    String? coverUrl,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('User not logged in');
+
+    final data = await _client
+        .from(SupabaseConstants.stories)
+        .insert({
+          'author_id': userId,
+          'title': title.isEmpty ? 'শিরোনামহীন খসড়া' : title,
+          'description': description,
+          'category': category,
+          'tags': tags,
+          'content_blocks': contentBlocks.map((e) => e.toJson()).toList(),
+          'cover_url': coverUrl,
+          'is_published': false,
+        })
+        .select()
+        .single();
+
+    return StoryModel.fromJson(data);
+  }
+
+  // ======================
+  // Get User Drafts
+  // ======================
+  Future<List<StoryModel>> getDrafts() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return [];
+
+    final data = await _client
+        .from(SupabaseConstants.stories)
+        .select()
+        .eq('author_id', userId)
+        .eq('is_published', false)
+        .order('updated_at', ascending: false);
+
+    return (data as List).map((e) => StoryModel.fromJson(e)).toList();
+  }
+
+  // ======================
+  // Publish Draft
+  // ======================
+  Future<void> publishDraft(String storyId) async {
+    await _client.from(SupabaseConstants.stories).update({
+      'is_published': true,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', storyId);
+  }
+
+  // ======================
+  // Feed (Published stories)
+  // ======================
+  Future<List<StoryModel>> getFeed({
+    int limit = 15,
+    int offset = 0,
+  }) async {
     final data = await _client
         .from(SupabaseConstants.stories)
         .select('''
@@ -68,7 +130,7 @@ class StoryService {
   }
 
   // ======================
-  // Get Single Story
+  // Get Story by ID
   // ======================
   Future<StoryModel?> getStoryById(String storyId) async {
     final data = await _client
@@ -129,93 +191,23 @@ class StoryService {
   }
 
   // ======================
-  // Delete / Unpublish
+  // Delete Story
   // ======================
   Future<void> deleteStory(String storyId) async {
     await _client.from(SupabaseConstants.stories).delete().eq('id', storyId);
   }
 
-  Future<void> unpublishStory(String storyId) async {
-    await _client
-        .from(SupabaseConstants.stories)
-        .update({'is_published': false})
-        .eq('id', storyId);
-  }
-
   // ======================
-  // Get User's Stories
+  // Get Stories by Author
   // ======================
   Future<List<StoryModel>> getStoriesByAuthor(String authorId) async {
     final data = await _client
         .from(SupabaseConstants.stories)
         .select()
         .eq('author_id', authorId)
+        .eq('is_published', true)
         .order('created_at', ascending: false);
 
-    return (data as List)
-        .map((json) => StoryModel.fromJson(json))
-        .toList();
-  }
-
-  // ======================
-  // Save as Draft
-  // ======================
-  Future<StoryModel> saveDraft({
-    required String title,
-    String? description,
-    String? category,
-    List<String> tags = const [],
-    required List<ContentBlock> contentBlocks,
-    String? coverUrl,
-  }) async {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) throw Exception('User not logged in');
-
-    final data = await _client
-        .from(SupabaseConstants.stories)
-        .insert({
-          'author_id': userId,
-          'title': title.isEmpty ? 'শিরোনামহীন খসড়া' : title,
-          'description': description,
-          'category': category,
-          'tags': tags,
-          'content_blocks': contentBlocks.map((e) => e.toJson()).toList(),
-          'cover_url': coverUrl,
-          'is_published': false, // Draft
-        })
-        .select()
-        .single();
-
-    return StoryModel.fromJson(data);
-  }
-
-  // ======================
-  // Get User Drafts
-  // ======================
-  Future<List<StoryModel>> getDrafts() async {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) return [];
-
-    final data = await _client
-        .from(SupabaseConstants.stories)
-        .select()
-        .eq('author_id', userId)
-        .eq('is_published', false)
-        .order('updated_at', ascending: false);
-
     return (data as List).map((e) => StoryModel.fromJson(e)).toList();
-  }
-
-  // ======================
-  // Publish Draft
-  // ======================
-  Future<void> publishDraft(String storyId) async {
-    await _client
-        .from(SupabaseConstants.stories)
-        .update({
-          'is_published': true,
-          'updated_at': DateTime.now().toIso8601String(),
-        })
-        .eq('id', storyId);
   }
 }
