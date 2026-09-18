@@ -18,6 +18,7 @@ import '../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../features/profile/presentation/screens/my_works_screen.dart';
 import '../features/profile/presentation/screens/saved_stories_screen.dart';
 import '../features/search/presentation/screens/search_screen.dart';
+import '../features/offline/presentation/screens/offline_downloads_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -143,6 +144,13 @@ final appRouter = GoRouter(
       path: '/search',
       name: 'search',
       builder: (context, state) => const SearchScreen(),
+    ),
+
+    // Offline Downloads
+    GoRoute(
+      path: '/offline',
+      name: 'offline',
+      builder: (context, state) => const OfflineDownloadsScreen(),
     ),
   ],
 );
