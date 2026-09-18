@@ -8,6 +8,7 @@ import '../../../../core/services/reaction_service.dart';
 import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/services/follow_service.dart';
 import '../../../../core/services/reading_progress_service.dart';
+import '../../../../core/services/offline_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../social/presentation/widgets/reaction_picker.dart';
 import '../../../social/presentation/widgets/comment_section.dart';
@@ -27,6 +28,7 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
   final _bookmarkService = BookmarkService();
   final _followService = FollowService();
   final _progressService = ReadingProgressService();
+  final _offlineService = OfflineService();
 
   StoryModel? _story;
   bool _isLoading = true;
@@ -35,6 +37,7 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
   String? _userReaction;
   bool _isBookmarked = false;
   bool _isFollowing = false;
+  bool _isDownloaded = false;
 
   @override
   void initState() {
@@ -60,6 +63,7 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
         storyId: widget.storyId,
       );
       final following = await _followService.isFollowing(story.authorId);
+      final downloaded = await _offlineService.isStoryDownloaded(widget.storyId);
 
       // Reading progress সেভ (খোলা হয়েছে)
       await _progressService.saveProgress(
@@ -72,6 +76,7 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
         _userReaction = reaction;
         _isBookmarked = bookmarked;
         _isFollowing = following;
+        _isDownloaded = downloaded;
         _isLoading = false;
       });
     } catch (e) {
@@ -191,6 +196,28 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
     }
   }
 
+  Future<void> _toggleDownload() async {
+    if (_story == null) return;
+
+    if (_isDownloaded) {
+      await _offlineService.removeStoryOffline(widget.storyId);
+      setState(() => _isDownloaded = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ডাউনলোড সরানো হয়েছে')),
+        );
+      }
+    } else {
+      await _offlineService.saveStoryOffline(_story!);
+      setState(() => _isDownloaded = true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('অফলাইনে সেভ হয়েছে')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -202,6 +229,13 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
           onPressed: () => context.pop(),
         ),
         actions: [
+          IconButton(
+            icon: Icon(
+              _isDownloaded ? Icons.download_done : Icons.download_outlined,
+              color: _isDownloaded ? AppColors.primary : null,
+            ),
+            onPressed: _toggleDownload,
+          ),
           IconButton(
             icon: Icon(
               _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
@@ -482,3 +516,4 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
     );
   }
 }
+
