@@ -52,65 +52,112 @@ class _DraftsScreenState extends State<DraftsScreen> {
     }
   }
 
+  Future<void> _delete(String storyId) async {
+    try {
+      await _storyService.deleteStory(storyId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('খসড়া মুছে ফেলা হয়েছে')),
+        );
+      }
+      _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('সমস্যা: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('খসড়া')),
+      appBar: AppBar(
+        title: const Text('খসড়া'),
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _drafts.isEmpty
               ? Center(
-                  child: Text(
-                    'কোনো খসড়া নেই',
-                    style: TextStyle(
-                      color: isDark
-                          ? AppColors.darkTextSecondary
-                          : AppColors.lightTextSecondary,
-                    ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.drafts_outlined,
+                        size: 56,
+                        color: isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'কোনো খসড়া নেই',
+                        style: TextStyle(
+                          color: isDark
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _drafts.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final draft = _drafts[index];
-                    return Card(
-                      child: ListTile(
-                        title: Text(
-                          draft.title,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          draft.previewText,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: PopupMenuButton<String>(
-                          onSelected: (value) {
-                            if (value == 'edit') {
-                              context.push('/edit-story/${draft.id}');
-                            } else if (value == 'publish') {
-                              _publish(draft.id);
-                            }
-                          },
-                          itemBuilder: (_) => [
-                            const PopupMenuItem(
-                              value: 'edit',
-                              child: Text('এডিট'),
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _drafts.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final draft = _drafts[index];
+                      return Card(
+                        child: ListTile(
+                          title: Text(
+                            draft.title,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            draft.previewText,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isDark
+                                  ? AppColors.darkTextSecondary
+                                  : AppColors.lightTextSecondary,
                             ),
-                            const PopupMenuItem(
-                              value: 'publish',
-                              child: Text('প্রকাশ করুন'),
-                            ),
-                          ],
+                          ),
+                          trailing: PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                context.push('/edit-story/${draft.id}');
+                              } else if (value == 'publish') {
+                                _publish(draft.id);
+                              } else if (value == 'delete') {
+                                _delete(draft.id);
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Text('এডিট'),
+                              ),
+                              PopupMenuItem(
+                                value: 'publish',
+                                child: Text('প্রকাশ করুন'),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text('মুছুন'),
+                              ),
+                            ],
+                          ),
+                          onTap: () => context.push('/edit-story/${draft.id}'),
                         ),
-                        onTap: () => context.push('/edit-story/${draft.id}'),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
     );
   }
