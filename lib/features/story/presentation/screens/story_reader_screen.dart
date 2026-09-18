@@ -33,11 +33,13 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
   StoryModel? _story;
   bool _isLoading = true;
   String? _error;
+  bool _isOfflineMode = false;
 
   String? _userReaction;
   bool _isBookmarked = false;
   bool _isFollowing = false;
   bool _isDownloaded = false;
+  double _progressPercent = 0;
 
   @override
   void initState() {
@@ -47,47 +49,58 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
 
   Future<void> _loadStory() async {
     try {
+      // আগে অনলাইন চেষ্টা
       final story = await _storyService.getStoryById(widget.storyId);
-      if (story == null) {
+
+      if (story != null) {
+        final reaction = await _reactionService.getUserReaction(storyId: widget.storyId);
+        final bookmarked = await _bookmarkService.isBookmarked(storyId: widget.storyId);
+        final following = await _followService.isFollowing(story.authorId);
+        final downloaded = await _offlineService.isStoryDownloaded(widget.storyId);
+        final progress = await _progressService.getProgress(storyId: widget.storyId);
+
         setState(() {
-          _error = 'গল্প পাওয়া যায়নি';
+          _story = story;
+          _userReaction = reaction;
+          _isBookmarked = bookmarked;
+          _isFollowing = following;
+          _isDownloaded = downloaded;
+          _progressPercent = progress?.progressPercent ?? 0;
+          _isOfflineMode = false;
           _isLoading = false;
         });
         return;
       }
+    } catch (_) {
+      // নেটওয়ার্ক এরর — offline চেষ্টা
+    }
 
-      final reaction = await _reactionService.getUserReaction(
-        storyId: widget.storyId,
-      );
-      final bookmarked = await _bookmarkService.isBookmarked(
-        storyId: widget.storyId,
-      );
-      final following = await _followService.isFollowing(story.authorId);
-      final downloaded = await _offlineService.isStoryDownloaded(widget.storyId);
+    // Offline fallback
+    final offlineStories = await _offlineService.getOfflineStories();
+    final offline = offlineStories.where((s) => s.id == widget.storyId).toList();
 
-      // Reading progress সেভ (খোলা হয়েছে)
-      await _progressService.saveProgress(
-        storyId: widget.storyId,
-        progressPercent: 0.0,
-      );
-
+    if (offline.isNotEmpty) {
       setState(() {
-        _story = story;
-        _userReaction = reaction;
-        _isBookmarked = bookmarked;
-        _isFollowing = following;
-        _isDownloaded = downloaded;
+        _story = offline.first;
+        _isOfflineMode = true;
+        _isDownloaded = true;
         _isLoading = false;
       });
-    } catch (e) {
+    } else {
       setState(() {
-        _error = 'গল্প লোড করতে সমস্যা হয়েছে';
+        _error = 'গল্প লোড করা যায়নি (অফলাইনেও নেই)';
         _isLoading = false;
       });
     }
   }
 
   void _showReactionPicker() {
+    if (_isOfflineMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('অফলাইনে রিয়্যাকশন দেওয়া যাবে না')),
+      );
+      return;
+    }
     ReactionPicker.show(
       context,
       current: _userReaction,
@@ -97,15 +110,10 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
             reactionType: type,
             storyId: widget.storyId,
           );
-
           setState(() {
-            if (_userReaction == type) {
-              _userReaction = null;
-            } else {
-              _userReaction = type;
-            }
+            _userReaction = _userReaction == type ? null : type;
           });
-        } catch (e) {
+        } catch (_) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('রিয়্যাকশন দিতে সমস্যা হয়েছে')),
@@ -117,6 +125,12 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
   }
 
   void _showComments() {
+    if (_isOfflineMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('অফলাইনে কমেন্ট দেখা যাবে না')),
+      );
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -126,13 +140,11 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
           initialChildSize: 0.75,
           minChildSize: 0.4,
           maxChildSize: 0.95,
-          builder: (_, scrollController) {
+          builder: (_, __) {
             return Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
                 children: [
@@ -145,9 +157,7 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  Expanded(
-                    child: CommentSection(storyId: widget.storyId),
-                  ),
+                  Expanded(child: CommentSection(storyId: widget.storyId)),
                 ],
               ),
             );
@@ -158,47 +168,31 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
   }
 
   Future<void> _toggleBookmark() async {
+    if (_isOfflineMode) return;
     try {
       await _bookmarkService.toggleBookmark(storyId: widget.storyId);
       setState(() => _isBookmarked = !_isBookmarked);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              _isBookmarked ? 'সংরক্ষণ করা হয়েছে' : 'সংরক্ষণ সরানো হয়েছে',
-            ),
+            content: Text(_isBookmarked ? 'সংরক্ষণ করা হয়েছে' : 'সংরক্ষণ সরানো হয়েছে'),
             duration: const Duration(seconds: 1),
           ),
         );
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('সংরক্ষণ করতে সমস্যা হয়েছে')),
-        );
-      }
-    }
+    } catch (_) {}
   }
 
   Future<void> _toggleFollow() async {
-    if (_story == null) return;
-
+    if (_isOfflineMode || _story == null) return;
     try {
       await _followService.toggleFollow(_story!.authorId);
       setState(() => _isFollowing = !_isFollowing);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ফলো করতে সমস্যা হয়েছে')),
-        );
-      }
-    }
+    } catch (_) {}
   }
 
   Future<void> _toggleDownload() async {
     if (_story == null) return;
-
     if (_isDownloaded) {
       await _offlineService.removeStoryOffline(widget.storyId);
       setState(() => _isDownloaded = false);
@@ -228,7 +222,24 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
+        title: _isOfflineMode
+            ? const Text('অফলাইন', style: TextStyle(fontSize: 14))
+            : null,
         actions: [
+          if (_progressPercent > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Center(
+                child: Text(
+                  '${_progressPercent.toInt()}%',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ),
           IconButton(
             icon: Icon(
               _isDownloaded ? Icons.download_done : Icons.download_outlined,
@@ -236,21 +247,20 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
             ),
             onPressed: _toggleDownload,
           ),
-          IconButton(
-            icon: Icon(
-              _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-              color: _isBookmarked ? AppColors.primary : null,
+          if (!_isOfflineMode)
+            IconButton(
+              icon: Icon(
+                _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                color: _isBookmarked ? AppColors.primary : null,
+              ),
+              onPressed: _toggleBookmark,
             ),
-            onPressed: _toggleBookmark,
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: () {},
-          ),
         ],
       ),
       body: _buildBody(isDark),
-      bottomNavigationBar: _story == null ? null : _buildBottomBar(isDark),
+      bottomNavigationBar: _story == null || _isOfflineMode
+          ? null
+          : _buildBottomBar(isDark),
     );
   }
 
@@ -277,148 +287,156 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
 
     final story = _story!;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollUpdateNotification && !_isOfflineMode) {
+          final metrics = notification.metrics;
+          if (metrics.maxScrollExtent > 0) {
+            final percent =
+                (metrics.pixels / metrics.maxScrollExtent * 100).clamp(0.0, 100.0);
+            if ((percent - _progressPercent).abs() > 5) {
+              _progressPercent = percent;
+              _progressService.saveProgress(
+                storyId: widget.storyId,
+                progressPercent: _progressPercent,
+              );
+              setState(() {});
+            }
+          }
+        }
+        return false;
+      },
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title
-          Text(
-            story.title,
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-              height: 1.35,
-              color: isDark
-                  ? AppColors.darkTextPrimary
-                  : AppColors.lightTextPrimary,
+          // Progress bar
+          if (_progressPercent > 0)
+            LinearProgressIndicator(
+              value: _progressPercent / 100,
+              backgroundColor: isDark
+                  ? AppColors.darkBorder
+                  : AppColors.lightBorder,
+              color: AppColors.primary,
+              minHeight: 3,
+            ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    story.title,
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      height: 1.35,
+                      color: isDark
+                          ? AppColors.darkTextPrimary
+                          : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: AppColors.primary.withOpacity(0.15),
+                        backgroundImage: story.authorAvatar != null
+                            ? CachedNetworkImageProvider(story.authorAvatar!)
+                            : null,
+                        child: story.authorAvatar == null
+                            ? Text(
+                                (story.authorName ?? 'U')[0].toUpperCase(),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                  fontSize: 14,
+                                ),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          story.authorName ?? 'অজানা লেখক',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? AppColors.darkTextPrimary
+                                : AppColors.lightTextPrimary,
+                          ),
+                        ),
+                      ),
+                      if (!_isOfflineMode)
+                        SizedBox(
+                          height: 34,
+                          child: OutlinedButton(
+                            onPressed: _toggleFollow,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              side: const BorderSide(color: AppColors.primary),
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                            child: Text(
+                              _isFollowing ? 'আনফলো' : 'ফলো',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  ...story.contentBlocks.map((block) {
+                    if (block.isText) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          block.value,
+                          style: TextStyle(
+                            fontSize: 17,
+                            height: 1.75,
+                            color: isDark
+                                ? AppColors.darkTextPrimary
+                                : AppColors.lightTextPrimary,
+                          ),
+                        ),
+                      );
+                    } else if (block.isImage) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: CachedNetworkImage(
+                            imageUrl: block.value,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => Container(
+                              height: 200,
+                              color: isDark
+                                  ? AppColors.darkSurface
+                                  : AppColors.lightBorder,
+                              child: const Center(
+                                  child: CircularProgressIndicator()),
+                            ),
+                            errorWidget: (_, __, ___) =>
+                                const Icon(Icons.broken_image, size: 48),
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 14),
-
-          // Author + Follow
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: AppColors.primary.withOpacity(0.15),
-                backgroundImage: story.authorAvatar != null
-                    ? CachedNetworkImageProvider(story.authorAvatar!)
-                    : null,
-                child: story.authorAvatar == null
-                    ? Text(
-                        (story.authorName ?? 'U')[0].toUpperCase(),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                          fontSize: 14,
-                        ),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      story.authorName ?? 'অজানা লেখক',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? AppColors.darkTextPrimary
-                            : AppColors.lightTextPrimary,
-                      ),
-                    ),
-                    if (story.authorUsername != null)
-                      Text(
-                        '@${story.authorUsername}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark
-                              ? AppColors.darkTextSecondary
-                              : AppColors.lightTextSecondary,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              // Follow Button
-              SizedBox(
-                height: 34,
-                child: OutlinedButton(
-                  onPressed: _toggleFollow,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor:
-                        _isFollowing ? AppColors.primary : AppColors.primary,
-                    side: BorderSide(
-                      color: AppColors.primary,
-                      width: _isFollowing ? 1.2 : 1,
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
-                  child: Text(
-                    _isFollowing ? 'আনফলো' : 'ফলো',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Content Blocks
-          ...story.contentBlocks.map((block) {
-            if (block.isText) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Text(
-                  block.value,
-                  style: TextStyle(
-                    fontSize: 17,
-                    height: 1.75,
-                    color: isDark
-                        ? AppColors.darkTextPrimary
-                        : AppColors.lightTextPrimary,
-                  ),
-                ),
-              );
-            } else if (block.isImage) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: CachedNetworkImage(
-                    imageUrl: block.value,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      height: 200,
-                      color: isDark
-                          ? AppColors.darkSurface
-                          : AppColors.lightBorder,
-                      child: const Center(child: CircularProgressIndicator()),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      height: 200,
-                      color: isDark
-                          ? AppColors.darkSurface
-                          : AppColors.lightBorder,
-                      child: const Icon(Icons.broken_image),
-                    ),
-                  ),
-                ),
-              );
-            }
-            return const SizedBox.shrink();
-          }),
         ],
       ),
     );
@@ -439,7 +457,6 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
       child: SafeArea(
         child: Row(
           children: [
-            // Reaction
             InkWell(
               onTap: _showReactionPicker,
               borderRadius: BorderRadius.circular(8),
@@ -473,8 +490,6 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
               ),
             ),
             const SizedBox(width: 20),
-
-            // Comment
             InkWell(
               onTap: _showComments,
               borderRadius: BorderRadius.circular(8),
@@ -503,9 +518,7 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
                 ),
               ),
             ),
-
             const Spacer(),
-
             IconButton(
               icon: const Icon(Icons.share_outlined),
               onPressed: () {},
@@ -516,4 +529,3 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
     );
   }
 }
-
