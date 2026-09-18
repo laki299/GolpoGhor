@@ -27,7 +27,6 @@ class NovelCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Author
               Row(
                 children: [
                   CircleAvatar(
@@ -91,8 +90,6 @@ class NovelCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 14),
-
-              // Title
               Text(
                 novel.title,
                 style: TextStyle(
@@ -105,8 +102,6 @@ class NovelCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-
-              // Description
               if (novel.description != null && novel.description!.isNotEmpty)
                 Text(
                   novel.description!,
@@ -121,7 +116,6 @@ class NovelCard extends StatelessWidget {
                   ),
                 ),
               const SizedBox(height: 8),
-
               Text(
                 'আরও পড়ুন →',
                 style: TextStyle(
