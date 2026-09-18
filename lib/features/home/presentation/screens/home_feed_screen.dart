@@ -22,7 +22,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
   final _client = Supabase.instance.client;
   final _scrollController = ScrollController();
 
-  List<dynamic> _feedItems = []; // StoryModel বা NovelModel
+  List<dynamic> _feedItems = [];
   bool _isLoading = true;
   bool _isLoadingMore = false;
   String? _error;
@@ -63,7 +63,6 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     try {
       final stories = await _storyService.getFeed(limit: _limit, offset: 0);
 
-      // Novel গুলোও নিয়ে আসি
       final novelData = await _client
           .from(SupabaseConstants.novels)
           .select('''
@@ -88,7 +87,6 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
         return NovelModel.fromJson(map);
       }).toList();
 
-      // দুটো মিলিয়ে সময় অনুসারে সাজাই
       final combined = <dynamic>[...stories, ...novels];
       combined.sort((a, b) {
         final aDate = a is StoryModel ? a.createdAt : (a as NovelModel).createdAt;
