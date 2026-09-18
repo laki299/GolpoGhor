@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../features/auth/presentation/screens/login_screen.dart';
 import '../features/auth/presentation/screens/register_screen.dart';
 import '../features/home/presentation/screens/home_feed_screen.dart';
@@ -34,11 +35,14 @@ final appRouter = GoRouter(
     return null;
   },
   routes: [
+    // Home
     GoRoute(
       path: '/',
       name: 'home',
       builder: (context, state) => const HomeFeedScreen(),
     ),
+
+    // Auth
     GoRoute(
       path: '/login',
       name: 'login',
@@ -49,12 +53,14 @@ final appRouter = GoRouter(
       name: 'register',
       builder: (context, state) => const RegisterScreen(),
     ),
+
+    // Story
     GoRoute(
       path: '/story/:id',
       name: 'story-reader',
       builder: (context, state) {
-        final storyId = state.pathParameters['id']!;
-        return StoryReaderScreen(storyId: storyId);
+        final id = state.pathParameters['id']!;
+        return StoryReaderScreen(storyId: id);
       },
     ),
     GoRoute(
@@ -70,6 +76,8 @@ final appRouter = GoRouter(
         return EditStoryScreen(storyId: id);
       },
     ),
+
+    // Novel
     GoRoute(
       path: '/create-novel',
       name: 'create-novel',
@@ -107,6 +115,8 @@ final appRouter = GoRouter(
         return EpisodeReaderScreen(episodeId: id);
       },
     ),
+
+    // Profile
     GoRoute(
       path: '/profile',
       name: 'profile',
@@ -127,6 +137,8 @@ final appRouter = GoRouter(
       name: 'saved',
       builder: (context, state) => const SavedStoriesScreen(),
     ),
+
+    // Search
     GoRoute(
       path: '/search',
       name: 'search',
