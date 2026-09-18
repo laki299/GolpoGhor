@@ -1,0 +1,117 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/models/story_model.dart';
+import '../../../../core/services/story_service.dart';
+import '../../../../core/theme/app_colors.dart';
+
+class DraftsScreen extends StatefulWidget {
+  const DraftsScreen({super.key});
+
+  @override
+  State<DraftsScreen> createState() => _DraftsScreenState();
+}
+
+class _DraftsScreenState extends State<DraftsScreen> {
+  final _storyService = StoryService();
+  List<StoryModel> _drafts = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final drafts = await _storyService.getDrafts();
+      setState(() {
+        _drafts = drafts;
+        _isLoading = false;
+      });
+    } catch (_) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _publish(String storyId) async {
+    try {
+      await _storyService.publishDraft(storyId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('খসড়া প্রকাশিত হয়েছে')),
+        );
+      }
+      _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('সমস্যা: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('খসড়া')),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _drafts.isEmpty
+              ? Center(
+                  child: Text(
+                    'কোনো খসড়া নেই',
+                    style: TextStyle(
+                      color: isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary,
+                    ),
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _drafts.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final draft = _drafts[index];
+                    return Card(
+                      child: ListTile(
+                        title: Text(
+                          draft.title,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          draft.previewText,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (value) {
+                            if (value == 'edit') {
+                              context.push('/edit-story/${draft.id}');
+                            } else if (value == 'publish') {
+                              _publish(draft.id);
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Text('এডিট'),
+                            ),
+                            const PopupMenuItem(
+                              value: 'publish',
+                              child: Text('প্রকাশ করুন'),
+                            ),
+                          ],
+                        ),
+                        onTap: () => context.push('/edit-story/${draft.id}'),
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
+}
