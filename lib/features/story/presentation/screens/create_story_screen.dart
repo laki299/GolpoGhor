@@ -20,13 +20,13 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _contentBeforeController = TextEditingController(); // ছবির আগের লেখা
-  final _contentAfterController = TextEditingController();  // ছবির পরের লেখা
+  final _contentBeforeController = TextEditingController();
+  final _contentAfterController = TextEditingController();
 
   String? _selectedCategory;
   File? _selectedImage;
   bool _isPublishing = false;
-  bool _imageInserted = false; // ছবি যোগ করা হয়েছে কিনা
+  bool _imageInserted = false;
 
   final _storyService = StoryService();
   final _storageService = StorageService();
@@ -57,13 +57,11 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
 
   void _removeImage() {
     setState(() {
-      // ছবির পরের লেখা আগের লেখার সাথে মিলিয়ে দিই
       if (_contentAfterController.text.trim().isNotEmpty) {
         final before = _contentBeforeController.text;
         final after = _contentAfterController.text;
-        _contentBeforeController.text = before.isEmpty
-            ? after
-            : '$before\n\n$after';
+        _contentBeforeController.text =
+            before.isEmpty ? after : '$before\n\n$after';
         _contentAfterController.clear();
       }
       _selectedImage = null;
@@ -73,29 +71,18 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
 
   List<ContentBlock> _buildBlocks({String? imageUrl}) {
     final blocks = <ContentBlock>[];
-
     final before = _contentBeforeController.text.trim();
     final after = _contentAfterController.text.trim();
 
     if (before.isNotEmpty) {
       blocks.add(ContentBlock(type: 'text', value: before));
     }
-
     if (imageUrl != null) {
       blocks.add(ContentBlock(type: 'image', value: imageUrl));
     }
-
     if (after.isNotEmpty) {
       blocks.add(ContentBlock(type: 'text', value: after));
     }
-
-    // ছবি না থাকলে শুধু before (বা সব একসাথে)
-    if (imageUrl == null && before.isEmpty && after.isEmpty) {
-      // খালি
-    } else if (imageUrl == null && after.isNotEmpty && before.isEmpty) {
-      blocks.add(ContentBlock(type: 'text', value: after));
-    }
-
     return blocks;
   }
 
@@ -165,6 +152,8 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('নতুন গল্প'),
@@ -211,7 +200,6 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
             ),
             const Divider(),
             const SizedBox(height: 8),
-
             DropdownButtonFormField<String>(
               value: _selectedCategory,
               decoration: const InputDecoration(
@@ -224,7 +212,6 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
               onChanged: (v) => setState(() => _selectedCategory = v),
             ),
             const SizedBox(height: 16),
-
             TextFormField(
               controller: _descriptionController,
               maxLines: 2,
@@ -234,7 +221,7 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
             ),
             const SizedBox(height: 20),
 
-            // ===== ছবির আগের লেখা =====
+            // ছবির আগের লেখা
             TextFormField(
               controller: _contentBeforeController,
               maxLines: null,
@@ -243,14 +230,13 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
               decoration: InputDecoration(
                 hintText: _imageInserted
                     ? 'ছবির আগের লেখা (ঐচ্ছিক)...'
-                    : 'এখানে গল্প লিখুন... ছবি মাঝে বা শেষে যোগ করতে পারবেন',
+                    : 'এখানে গল্প লিখুন... ছবি যেকোনো সময় যোগ করতে পারবেন',
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
               ),
             ),
 
-            // ===== ছবি =====
             if (_imageInserted && _selectedImage != null) ...[
               const SizedBox(height: 12),
               Stack(
@@ -281,16 +267,11 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                '↑ ছবি এখানে বসবে (আগের ও পরের লেখার মাঝে)',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.primary,
-                ),
+                '↑ ছবি এখানে (আগের ও পরের লেখার মাঝে)',
                 textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AppColors.primary),
               ),
               const SizedBox(height: 12),
-
-              // ===== ছবির পরের লেখা =====
               TextFormField(
                 controller: _contentAfterController,
                 maxLines: null,
@@ -308,19 +289,19 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
               OutlinedButton.icon(
                 onPressed: _pickImage,
                 icon: const Icon(Icons.image_outlined),
-                label: const Text('ছবি যোগ করুন (যেকোনো জায়গায় — সর্বোচ্চ ১টি)'),
+                label: const Text('ছবি যোগ করুন (সর্বোচ্চ ১টি)'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                'টিপস: আগে কিছু লিখে ছবি দিলে → ছবি মাঝে যাবে\n'
-                'শুধু ছবি দিলে → ছবি শুরুতে\n'
-                'লেখা শেষে ছবি দিলে → ছবি শেষে',
+                '• আগে লিখে ছবি দিলে → ছবি মাঝে\n'
+                '• শুধু ছবি দিলে → ছবি শুরুতে\n'
+                '• লেখা শেষে ছবি দিলে → ছবি শেষে',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Theme.of(context).brightness == Brightness.dark
+                  color: isDark
                       ? AppColors.darkTextSecondary
                       : AppColors.lightTextSecondary,
                 ),
