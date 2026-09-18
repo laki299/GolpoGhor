@@ -43,8 +43,9 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       List<CommentModel> comments = [];
       if (widget.storyId != null) {
         comments = await _commentService.getStoryComments(widget.storyId!);
+      } else if (widget.episodeId != null) {
+        comments = await _commentService.getEpisodeComments(widget.episodeId!);
       }
-      // Episode comments পরে যোগ করা যাবে
       setState(() {
         _comments = comments;
         _isLoading = false;
@@ -99,8 +100,6 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
             ),
           ),
         ),
-
-        // Input
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
@@ -142,10 +141,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
             ],
           ),
         ),
-
         const Divider(),
-
-        // Comments List
         if (_isLoading)
           const Padding(
             padding: EdgeInsets.all(24),
@@ -166,16 +162,15 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
             ),
           )
         else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount: _comments.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 16),
-            itemBuilder: (context, index) {
-              final comment = _comments[index];
-              return _CommentTile(comment: comment);
-            },
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              itemCount: _comments.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 16),
+              itemBuilder: (context, index) {
+                return _CommentTile(comment: _comments[index]);
+              },
+            ),
           ),
       ],
     );
