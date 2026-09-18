@@ -175,6 +175,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                       onTap: () => context.push('/saved'),
                     ),
                     _ProfileMenuItem(
+                      icon: Icons.download_outlined,
+                      title: 'ডাউনলোড করা কনটেন্ট',
+                      onTap: () => context.push('/offline'),
+                    ),
+                    _ProfileMenuItem(
                       icon: Icons.history,
                       title: 'পড়ার ইতিহাস',
                       onTap: () {
@@ -244,7 +249,7 @@ class _CountItem extends StatelessWidget {
 
   const _CountItem({required this.count, required this.label});
 
-  @override
+  @style
   Widget build(BuildContext context) {
     return Column(
       children: [
@@ -269,3 +274,4 @@ class _CountItem extends StatelessWidget {
     );
   }
 }
+
