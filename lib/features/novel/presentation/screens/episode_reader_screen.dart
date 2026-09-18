@@ -29,6 +29,7 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
   bool _isLoading = true;
   String? _error;
   bool _isDownloaded = false;
+  bool _isOfflineMode = false;
   double _progressPercent = 0;
 
   @override
@@ -40,43 +41,45 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
   Future<void> _loadEpisode() async {
     try {
       final episode = await _novelService.getEpisodeById(widget.episodeId);
-      if (episode == null) {
+      if (episode != null) {
+        final episodes = await _novelService.getEpisodes(episode.novelId);
+        final downloaded =
+            await _offlineService.isEpisodeDownloaded(widget.episodeId);
+        final progress =
+            await _progressService.getProgress(episodeId: widget.episodeId);
+
         setState(() {
-          _error = 'পর্ব পাওয়া যায়নি';
+          _episode = episode;
+          _allEpisodes = episodes;
+          _isDownloaded = downloaded;
+          _progressPercent = progress?.progressPercent ?? 0;
+          _isOfflineMode = false;
           _isLoading = false;
         });
         return;
       }
+    } catch (_) {}
 
-      final episodes = await _novelService.getEpisodes(episode.novelId);
-      final downloaded =
-          await _offlineService.isEpisodeDownloaded(widget.episodeId);
-      final progress = await _progressService.getProgress(
-        episodeId: widget.episodeId,
-      );
-
-      await _progressService.saveProgress(
-        episodeId: widget.episodeId,
-        progressPercent: progress?.progressPercent ?? 0,
-      );
-
+    // Offline fallback
+    final list = await _offlineService.getOfflineEpisodes();
+    final found = list.where((e) => e.id == widget.episodeId).toList();
+    if (found.isNotEmpty) {
       setState(() {
-        _episode = episode;
-        _allEpisodes = episodes;
-        _isDownloaded = downloaded;
-        _progressPercent = progress?.progressPercent ?? 0;
+        _episode = found.first;
+        _isDownloaded = true;
+        _isOfflineMode = true;
         _isLoading = false;
       });
-    } catch (e) {
+    } else {
       setState(() {
-        _error = 'পর্ব লোড করতে সমস্যা হয়েছে';
+        _error = 'পর্ব লোড করা যায়নি';
         _isLoading = false;
       });
     }
   }
 
   void _goToPrevious() {
-    if (_episode == null) return;
+    if (_episode == null || _allEpisodes.isEmpty) return;
     final i = _allEpisodes.indexWhere((e) => e.id == _episode!.id);
     if (i > 0) {
       context.pushReplacement('/episode/${_allEpisodes[i - 1].id}');
@@ -84,7 +87,7 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
   }
 
   void _goToNext() {
-    if (_episode == null) return;
+    if (_episode == null || _allEpisodes.isEmpty) return;
     final i = _allEpisodes.indexWhere((e) => e.id == _episode!.id);
     if (i < _allEpisodes.length - 1) {
       context.pushReplacement('/episode/${_allEpisodes[i + 1].id}');
@@ -113,6 +116,12 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
   }
 
   void _showComments() {
+    if (_isOfflineMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('অফলাইনে কমেন্ট দেখা যাবে না')),
+      );
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -164,12 +173,16 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
           onPressed: () => context.pop(),
         ),
         title: _episode != null
-            ? Text('পর্ব ${_episode!.episodeNumber}')
+            ? Text(
+                _isOfflineMode
+                    ? 'পর্ব ${_episode!.episodeNumber} (অফলাইন)'
+                    : 'পর্ব ${_episode!.episodeNumber}',
+              )
             : null,
         actions: [
           if (_progressPercent > 0)
             Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.only(right: 4),
               child: Center(
                 child: Text(
                   '${_progressPercent.toInt()}%',
@@ -207,89 +220,107 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
 
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        if (notification is ScrollUpdateNotification) {
+        if (notification is ScrollUpdateNotification && !_isOfflineMode) {
           final metrics = notification.metrics;
           if (metrics.maxScrollExtent > 0) {
             final percent =
-                (metrics.pixels / metrics.maxScrollExtent * 100).clamp(0, 100);
+                (metrics.pixels / metrics.maxScrollExtent * 100).clamp(0.0, 100.0);
             if ((percent - _progressPercent).abs() > 5) {
-              _progressPercent = percent.toDouble();
+              _progressPercent = percent;
               _progressService.saveProgress(
                 episodeId: widget.episodeId,
                 progressPercent: _progressPercent,
               );
+              setState(() {});
             }
           }
         }
         return false;
       },
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              ep.title,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                height: 1.35,
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
-              ),
+      child: Column(
+        children: [
+          if (_progressPercent > 0)
+            LinearProgressIndicator(
+              value: _progressPercent / 100,
+              backgroundColor:
+                  isDark ? AppColors.darkBorder : AppColors.lightBorder,
+              color: AppColors.primary,
+              minHeight: 3,
             ),
-            const SizedBox(height: 24),
-            ...ep.contentBlocks.map((block) {
-              if (block.isText) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    block.value,
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    ep.title,
                     style: TextStyle(
-                      fontSize: 17,
-                      height: 1.75,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      height: 1.35,
                       color: isDark
                           ? AppColors.darkTextPrimary
                           : AppColors.lightTextPrimary,
                     ),
                   ),
-                );
-              } else if (block.isImage) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: CachedNetworkImage(
-                      imageUrl: block.value,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
-                        height: 200,
-                        color: isDark
-                            ? AppColors.darkSurface
-                            : AppColors.lightBorder,
-                        child: const Center(child: CircularProgressIndicator()),
-                      ),
-                      errorWidget: (_, __, ___) =>
-                          const Icon(Icons.broken_image, size: 48),
-                    ),
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            }),
-          ],
-        ),
+                  const SizedBox(height: 24),
+                  ...ep.contentBlocks.map((block) {
+                    if (block.isText) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          block.value,
+                          style: TextStyle(
+                            fontSize: 17,
+                            height: 1.75,
+                            color: isDark
+                                ? AppColors.darkTextPrimary
+                                : AppColors.lightTextPrimary,
+                          ),
+                        ),
+                      );
+                    } else if (block.isImage) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: CachedNetworkImage(
+                            imageUrl: block.value,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => Container(
+                              height: 200,
+                              color: isDark
+                                  ? AppColors.darkSurface
+                                  : AppColors.lightBorder,
+                              child: const Center(
+                                  child: CircularProgressIndicator()),
+                            ),
+                            errorWidget: (_, __, ___) =>
+                                const Icon(Icons.broken_image, size: 48),
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildBottomBar(bool isDark) {
-    final currentIndex =
-        _allEpisodes.indexWhere((e) => e.id == _episode!.id);
+    final currentIndex = _allEpisodes.isEmpty
+        ? -1
+        : _allEpisodes.indexWhere((e) => e.id == _episode!.id);
     final hasPrevious = currentIndex > 0;
-    final hasNext = currentIndex < _allEpisodes.length - 1;
+    final hasNext =
+        currentIndex >= 0 && currentIndex < _allEpisodes.length - 1;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -304,25 +335,28 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
       child: SafeArea(
         child: Row(
           children: [
-            TextButton.icon(
-              onPressed: hasPrevious ? _goToPrevious : null,
-              icon: const Icon(Icons.arrow_back_ios, size: 14),
-              label: const Text('আগের', style: TextStyle(fontSize: 13)),
-            ),
+            if (!_isOfflineMode)
+              TextButton.icon(
+                onPressed: hasPrevious ? _goToPrevious : null,
+                icon: const Icon(Icons.arrow_back_ios, size: 14),
+                label: const Text('আগের', style: TextStyle(fontSize: 13)),
+              ),
             IconButton(
               onPressed: _showComments,
               icon: const Icon(Icons.chat_bubble_outline, size: 22),
             ),
-            TextButton(
-              onPressed: () => context.pop(),
-              child: const Text('তালিকা', style: TextStyle(fontSize: 13)),
-            ),
+            if (!_isOfflineMode)
+              TextButton(
+                onPressed: () => context.pop(),
+                child: const Text('তালিকা', style: TextStyle(fontSize: 13)),
+              ),
             const Spacer(),
-            TextButton.icon(
-              onPressed: hasNext ? _goToNext : null,
-              icon: const Icon(Icons.arrow_forward_ios, size: 14),
-              label: const Text('পরের', style: TextStyle(fontSize: 13)),
-            ),
+            if (!_isOfflineMode)
+              TextButton.icon(
+                onPressed: hasNext ? _goToNext : null,
+                icon: const Icon(Icons.arrow_forward_ios, size: 14),
+                label: const Text('পরের', style: TextStyle(fontSize: 13)),
+              ),
           ],
         ),
       ),
