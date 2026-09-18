@@ -49,61 +49,71 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
     }
   }
 
-  Future<void> _publish() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_contentController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('গল্পের মূল লেখা লিখুন')),
-      );
-      return;
+  Future<void> _save({required bool isDraft}) async {
+    if (!isDraft) {
+      if (!_formKey.currentState!.validate()) return;
+      if (_contentController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('গল্পের মূল লেখা লিখুন')),
+        );
+        return;
+      }
     }
 
     setState(() => _isPublishing = true);
 
     try {
       String? imageUrl;
-
-      // Image upload (max 1)
       if (_selectedImage != null) {
         imageUrl = await _storageService.uploadStoryImage(_selectedImage!);
       }
 
-      // Content Blocks তৈরি
       final blocks = <ContentBlock>[
-        ContentBlock(type: 'text', value: _contentController.text.trim()),
+        if (_contentController.text.trim().isNotEmpty)
+          ContentBlock(type: 'text', value: _contentController.text.trim()),
       ];
-
       if (imageUrl != null) {
-        // ছবি শেষে যোগ করা হচ্ছে (পরে position control যোগ করা যাবে)
         blocks.add(ContentBlock(type: 'image', value: imageUrl));
       }
 
-      await _storyService.createStory(
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim().isEmpty
-            ? null
-            : _descriptionController.text.trim(),
-        category: _selectedCategory,
-        contentBlocks: blocks,
-        coverUrl: imageUrl,
-      );
+      if (isDraft) {
+        await _storyService.saveDraft(
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim().isEmpty
+              ? null
+              : _descriptionController.text.trim(),
+          category: _selectedCategory,
+          contentBlocks: blocks,
+          coverUrl: imageUrl,
+        );
+      } else {
+        await _storyService.createStory(
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim().isEmpty
+              ? null
+              : _descriptionController.text.trim(),
+          category: _selectedCategory,
+          contentBlocks: blocks,
+          coverUrl: imageUrl,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('গল্প সফলভাবে প্রকাশিত হয়েছে!')),
+          SnackBar(
+            content: Text(isDraft ? 'খসড়া সেভ হয়েছে' : 'গল্প প্রকাশিত হয়েছে!'),
+          ),
         );
         context.pop();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('প্রকাশ করতে সমস্যা হয়েছে: $e')),
+          SnackBar(content: Text('সমস্যা: $e')),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isPublishing = false);
-      }
+      if (mounted) setState(() => _isPublishing = false);
     }
   }
 
@@ -120,7 +130,11 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: _isPublishing ? null : _publish,
+            onPressed: _isPublishing ? null : () => _save(isDraft: true),
+            child: const Text('খসড়া'),
+          ),
+          TextButton(
+            onPressed: _isPublishing ? null : () => _save(isDraft: false),
             child: _isPublishing
                 ? const SizedBox(
                     width: 20,
