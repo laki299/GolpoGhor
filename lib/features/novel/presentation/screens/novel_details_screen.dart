@@ -37,7 +37,8 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
     try {
       final novel = await _novelService.getNovelById(widget.novelId);
       final episodes = await _novelService.getEpisodes(widget.novelId);
-      final bookmarked = await _bookmarkService.isBookmarked(novelId: widget.novelId);
+      final bookmarked =
+          await _bookmarkService.isBookmarked(novelId: widget.novelId);
 
       setState(() {
         _novel = novel;
@@ -50,6 +51,30 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
         _error = 'ডেটা লোড করতে সমস্যা হয়েছে';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _toggleBookmark() async {
+    try {
+      await _bookmarkService.toggleBookmark(novelId: widget.novelId);
+      setState(() => _isBookmarked = !_isBookmarked);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _isBookmarked ? 'সংরক্ষণ করা হয়েছে' : 'সংরক্ষণ সরানো হয়েছে',
+            ),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('সংরক্ষণ করতে সমস্যা হয়েছে')),
+        );
+      }
     }
   }
 
@@ -69,21 +94,7 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
               _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
               color: _isBookmarked ? AppColors.primary : null,
             ),
-            onPressed: () async {
-              await _bookmarkService.toggleBookmark(novelId: widget.novelId);
-              setState(() => _isBookmarked = !_isBookmarked);
-
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      _isBookmarked ? 'সংরক্ষণ করা হয়েছে' : 'সংরক্ষণ সরানো হয়েছে',
-                    ),
-                    duration: const Duration(seconds: 1),
-                  ),
-                );
-              }
-            },
+            onPressed: _toggleBookmark,
           ),
         ],
       ),
@@ -118,7 +129,6 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
       children: [
-        // Title
         Text(
           novel.title,
           style: TextStyle(
@@ -131,8 +141,6 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
           ),
         ),
         const SizedBox(height: 12),
-
-        // Author
         Row(
           children: [
             CircleAvatar(
@@ -165,7 +173,6 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
           ],
         ),
         const SizedBox(height: 16),
-
         if (novel.description != null && novel.description!.isNotEmpty) ...[
           Text(
             novel.description!,
@@ -179,11 +186,9 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
           ),
           const SizedBox(height: 20),
         ],
-
-        // Episode Count
         Text(
           'মোট পর্ব: ${novel.episodeCount}',
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: AppColors.primary,
@@ -192,8 +197,6 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
         const SizedBox(height: 16),
         const Divider(),
         const SizedBox(height: 8),
-
-        // Episode List
         ..._episodes.map((ep) {
           return ListTile(
             contentPadding: EdgeInsets.zero,
@@ -226,6 +229,12 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
                     ? AppColors.darkTextSecondary
                     : AppColors.lightTextSecondary,
               ),
+            ),
+            trailing: IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 20),
+              onPressed: () {
+                context.push('/edit-episode/${ep.id}');
+              },
             ),
             onTap: () {
               context.push('/episode/${ep.id}');
