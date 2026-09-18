@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/models/episode_model.dart';
 import '../../../../core/services/novel_service.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../social/presentation/widgets/comment_section.dart';
 
 class EpisodeReaderScreen extends ConsumerStatefulWidget {
   final String episodeId;
@@ -75,6 +76,46 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
     }
   }
 
+  void _showComments() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          builder: (_, __) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Expanded(
+                    child: CommentSection(episodeId: widget.episodeId),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -90,7 +131,8 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
             : null,
       ),
       body: _buildBody(isDark),
-      bottomNavigationBar: _episode == null ? null : _buildNavigationBar(isDark),
+      bottomNavigationBar:
+          _episode == null ? null : _buildNavigationBar(isDark),
     );
   }
 
@@ -173,7 +215,7 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
     final hasNext = currentIndex < _allEpisodes.length - 1;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
         border: Border(
@@ -186,19 +228,24 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            TextButton.icon(
+            IconButton(
               onPressed: hasPrevious ? _goToPrevious : null,
-              icon: const Icon(Icons.arrow_back_ios, size: 16),
-              label: const Text('পূর্বের পর্ব'),
+              icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+              tooltip: 'পূর্বের পর্ব',
+            ),
+            IconButton(
+              onPressed: _showComments,
+              icon: const Icon(Icons.chat_bubble_outline, size: 22),
+              tooltip: 'কমেন্ট',
             ),
             TextButton(
               onPressed: () => context.pop(),
               child: const Text('পর্ব তালিকা'),
             ),
-            TextButton.icon(
+            IconButton(
               onPressed: hasNext ? _goToNext : null,
-              icon: const Icon(Icons.arrow_forward_ios, size: 16),
-              label: const Text('পরের পর্ব'),
+              icon: const Icon(Icons.arrow_forward_ios, size: 18),
+              tooltip: 'পরের পর্ব',
             ),
           ],
         ),
