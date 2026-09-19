@@ -4,6 +4,7 @@ class UserModel {
   final String? fullName;
   final String? bio;
   final String? avatarUrl;
+  final bool isAdmin;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -13,6 +14,7 @@ class UserModel {
     this.fullName,
     this.bio,
     this.avatarUrl,
+    this.isAdmin = false,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -24,6 +26,7 @@ class UserModel {
       fullName: json['full_name'] as String?,
       bio: json['bio'] as String?,
       avatarUrl: json['avatar_url'] as String?,
+      isAdmin: json['is_admin'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
@@ -36,6 +39,7 @@ class UserModel {
       'full_name': fullName,
       'bio': bio,
       'avatar_url': avatarUrl,
+      'is_admin': isAdmin,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -46,6 +50,7 @@ class UserModel {
     String? fullName,
     String? bio,
     String? avatarUrl,
+    bool? isAdmin,
   }) {
     return UserModel(
       id: id,
@@ -53,6 +58,7 @@ class UserModel {
       fullName: fullName ?? this.fullName,
       bio: bio ?? this.bio,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      isAdmin: isAdmin ?? this.isAdmin,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );
