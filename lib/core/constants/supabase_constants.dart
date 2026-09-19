@@ -15,5 +15,5 @@ class SupabaseConstants {
   static const String readingProgress = 'reading_progress';
 
   // Storage
-  static const String storyImagesBucket = 'story-images';
+  static const String storyImagesBucket = 'story_images';
 }
