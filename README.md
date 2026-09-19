@@ -9,9 +9,13 @@
 - Facebook-like Feed + Book-like Reading Experience
 - Reaction (একাধিক), Comment + Reply
 - Bookmark, Search (Partial Match)
+- Follow System (Follower / Following count)
 - Dark Mode
-- Image support (সর্বোচ্চ ১টি per content)
-- Offline support (পরবর্তী ধাপে)
+- Image support (সর্বোচ্চ ১টি per content, যেকোনো অবস্থানে)
+- Draft (খসড়া সেভ ও প্রকাশ)
+- Offline Download + Offline Reading
+- Reading Progress (% + progress bar)
+- Profile Edit, My Works, Saved Stories
 
 ## Tech Stack
 
@@ -19,6 +23,10 @@
 - Supabase (Auth + Database + Storage)
 - Riverpod
 - go_router
+- shared_preferences (Offline)
+- google_fonts
+- cached_network_image
+- image_picker
 
 ## Getting Started
 
@@ -43,7 +51,8 @@ lib/
 │   ├── novel/
 │   ├── profile/
 │   ├── search/
-│   └── social/
+│   ├── social/
+│   └── offline/
 └── routing/
 
 ## Database Tables
@@ -58,9 +67,40 @@ lib/
 - bookmarks
 - reading_progress
 
+## Storage
+
+- Bucket: `story-images` (Public read, Authenticated upload)
+
+## Main Routes
+
+| Route | Screen |
+|-------|--------|
+| `/` | Home Feed |
+| `/login` | Login |
+| `/register` | Register |
+| `/story/:id` | Story Reader |
+| `/create-story` | Create Story |
+| `/edit-story/:id` | Edit Story |
+| `/drafts` | Drafts |
+| `/novel/:id` | Novel Details |
+| `/episode/:id` | Episode Reader |
+| `/create-novel` | Create Novel |
+| `/add-episode/:novelId` | Add Episode |
+| `/profile` | Profile |
+| `/my-works` | My Works |
+| `/saved` | Saved Stories |
+| `/offline` | Offline Downloads |
+| `/search` | Search |
+
 ## Notes
 
 - Video সম্পূর্ণ নিষিদ্ধ
 - Comment-এ শুধু Text + Emoji
 - Episode Number automatic
 - Image automatic compress হয়
+- Offline content অ্যাপের ভিতরেই পড়া যায় (JSON local save)
+- Notification ও Admin Panel পরবর্তী ধাপে
+
+## License
+
+Private / Personal project.
