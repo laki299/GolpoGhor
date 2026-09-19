@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/models/user_model.dart';
+import '../../../../core/services/admin_service.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/follow_service.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -33,14 +34,18 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     if (profile != null) {
       final followers = await _followService.getFollowerCount(profile.id);
       final following = await _followService.getFollowingCount(profile.id);
-      setState(() {
-        _profile = profile;
-        _followerCount = followers;
-        _followingCount = following;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _profile = profile;
+          _followerCount = followers;
+          _followingCount = following;
+          _isLoading = false;
+        });
+      }
     } else {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -167,6 +172,19 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                       icon: Icons.download_outlined,
                       title: 'ডাউনলোড করা কনটেন্ট',
                       onTap: () => context.push('/offline'),
+                    ),
+                    FutureBuilder<bool>(
+                      future: AdminService().isCurrentUserAdmin(),
+                      builder: (context, snap) {
+                        if (snap.data == true) {
+                          return _ProfileMenuItem(
+                            icon: Icons.admin_panel_settings_outlined,
+                            title: 'অ্যাডমিন প্যানেল',
+                            onTap: () => context.push('/admin'),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
                     ),
                     const Divider(height: 32),
                     _ProfileMenuItem(
