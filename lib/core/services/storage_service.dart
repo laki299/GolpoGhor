@@ -10,17 +10,48 @@ class StorageService {
   final SupabaseClient _client = Supabase.instance.client;
   final _uuid = const Uuid();
 
-  /// Image compress + upload
-  /// Returns public URL
+  /// Story image compress + upload
   Future<String> uploadStoryImage(File imageFile) async {
     try {
-      // 1. Compress image
-      final compressedBytes = await _compressImage(imageFile);
-
-      // 2. Generate unique filename
-      final fileName =
-          '\( {_uuid.v4()} \){path.extension(imageFile.path).toLowerCase()}';
+      final compressedBytes = await _compressImage(imageFile, maxWidth: 1200, quality: 80);
+      final fileName = '${_uuid.v4()}.jpg';
       final filePath = 'stories/$fileName';
+
+      await _client.storage.from(SupabaseConstants.storyImagesBucket).uploadBinary(
+            filePath,
+            compressedBytes,
+            fileOptions: const FileOptions(
+              cacheControl: '3600',
+              upsert: false,
+              contentType: 'image/jpeg',
+            ),
+          );
+
+      return _client.storage
+          .from(SupabaseConstants.storyImagesBucket)
+          .getPublicUrl(filePath);
+    } catch (e) {
+      throw Exception('Image upload failed: $e');
+    }
+  }
+
+  /// Profile avatar: compress + upload
+  /// [oldAvatarUrl] থাকলে আগে সেটা ডিলিট করে
+  Future<String> uploadAvatar({
+    required File imageFile,
+    String? oldAvatarUrl,
+  }) async {
+    try {
+      // 1. পুরনো avatar ডিলিট
+      if (oldAvatarUrl != null && oldAvatarUrl.isNotEmpty) {
+        await deleteImage(oldAvatarUrl);
+      }
+
+      // 2. Compress (avatar ছোট রাখি)
+      final compressedBytes = await _compressImage(imageFile, maxWidth: 512, quality: 85);
+      final userId = _client.auth.currentUser?.id ?? _uuid.v4();
+      final fileName = '\( {userId}_ \){_uuid.v4()}.jpg';
+      final filePath = 'avatars/$fileName';
 
       // 3. Upload
       await _client.storage.from(SupabaseConstants.storyImagesBucket).uploadBinary(
@@ -29,22 +60,25 @@ class StorageService {
             fileOptions: const FileOptions(
               cacheControl: '3600',
               upsert: false,
+              contentType: 'image/jpeg',
             ),
           );
 
-      // 4. Get public URL
-      final publicUrl = _client.storage
+      // 4. Public URL
+      return _client.storage
           .from(SupabaseConstants.storyImagesBucket)
           .getPublicUrl(filePath);
-
-      return publicUrl;
     } catch (e) {
-      throw Exception('Image upload failed: $e');
+      throw Exception('Avatar upload failed: $e');
     }
   }
 
-  /// Compress image to reduce size (max width 1200px, quality 80)
-  Future<Uint8List> _compressImage(File file) async {
+  /// Compress image
+  Future<Uint8List> _compressImage(
+    File file, {
+    int maxWidth = 1200,
+    int quality = 80,
+  }) async {
     final bytes = await file.readAsBytes();
     final image = img.decodeImage(bytes);
 
@@ -52,29 +86,25 @@ class StorageService {
       throw Exception('Invalid image file');
     }
 
-    // Resize if too large
     img.Image resized = image;
-    if (image.width > 1200) {
+    if (image.width > maxWidth) {
       resized = img.copyResize(
         image,
-        width: 1200,
+        width: maxWidth,
         interpolation: img.Interpolation.average,
       );
     }
 
-    // Encode as JPEG with quality 80
-    final compressed = img.encodeJpg(resized, quality: 80);
+    final compressed = img.encodeJpg(resized, quality: quality);
     return Uint8List.fromList(compressed);
   }
 
-  /// Delete image from storage
+  /// URL থেকে storage path বের করে ডিলিট
   Future<void> deleteImage(String imageUrl) async {
     try {
-      // URL থেকে path বের করা
       final uri = Uri.parse(imageUrl);
       final segments = uri.pathSegments;
 
-      // story-images/stories/xxxx.jpg → stories/xxxx.jpg
       final bucketIndex = segments.indexOf(SupabaseConstants.storyImagesBucket);
       if (bucketIndex == -1 || bucketIndex + 1 >= segments.length) return;
 
@@ -84,7 +114,7 @@ class StorageService {
           .from(SupabaseConstants.storyImagesBucket)
           .remove([filePath]);
     } catch (e) {
-      // Delete fail হলে ignore (optional)
+      // পুরনো ফাইল না থাকলে ignore
       print('Failed to delete image: $e');
     }
   }
