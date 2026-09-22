@@ -21,6 +21,7 @@ import '../features/profile/presentation/screens/saved_stories_screen.dart';
 import '../features/search/presentation/screens/search_screen.dart';
 import '../features/offline/presentation/screens/offline_downloads_screen.dart';
 import '../features/admin/presentation/screens/admin_dashboard_screen.dart';
+import '../features/wallet/presentation/screens/earn_wallet_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -146,6 +147,11 @@ final appRouter = GoRouter(
       path: '/admin',
       name: 'admin',
       builder: (context, state) => const AdminDashboardScreen(),
+    ),
+    GoRoute(
+      path: '/wallet',
+      name: 'wallet',
+      builder: (context, state) => const EarnWalletScreen(),
     ),
   ],
 );
