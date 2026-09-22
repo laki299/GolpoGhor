@@ -3,15 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/models/story_model.dart';
+import '../../../../core/constants/coin_constants.dart';
 import '../../../../core/services/story_service.dart';
 import '../../../../core/services/reaction_service.dart';
 import '../../../../core/services/bookmark_service.dart';
 import '../../../../core/services/follow_service.dart';
 import '../../../../core/services/reading_progress_service.dart';
 import '../../../../core/services/offline_service.dart';
+import '../../../../core/services/monetization_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../social/presentation/widgets/reaction_picker.dart';
 import '../../../social/presentation/widgets/comment_section.dart';
+import '../../../wallet/presentation/widgets/unlock_paywall.dart';
 
 class StoryReaderScreen extends ConsumerStatefulWidget {
   final String storyId;
@@ -29,11 +32,14 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
   final _followService = FollowService();
   final _progressService = ReadingProgressService();
   final _offlineService = OfflineService();
+  final _monetization = MonetizationService();
 
   StoryModel? _story;
   bool _isLoading = true;
   String? _error;
   bool _isOfflineMode = false;
+  bool _hasAccess = true;
+  int _userCoins = 0;
 
   String? _userReaction;
   bool _isBookmarked = false;
@@ -49,15 +55,20 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
 
   Future<void> _loadStory() async {
     try {
-      // আগে অনলাইন চেষ্টা
       final story = await _storyService.getStoryById(widget.storyId);
 
       if (story != null) {
-        final reaction = await _reactionService.getUserReaction(storyId: widget.storyId);
-        final bookmarked = await _bookmarkService.isBookmarked(storyId: widget.storyId);
+        final reaction =
+            await _reactionService.getUserReaction(storyId: widget.storyId);
+        final bookmarked =
+            await _bookmarkService.isBookmarked(storyId: widget.storyId);
         final following = await _followService.isFollowing(story.authorId);
-        final downloaded = await _offlineService.isStoryDownloaded(widget.storyId);
-        final progress = await _progressService.getProgress(storyId: widget.storyId);
+        final downloaded =
+            await _offlineService.isStoryDownloaded(widget.storyId);
+        final progress =
+            await _progressService.getProgress(storyId: widget.storyId);
+        final access = await _monetization.canAccessStory(widget.storyId);
+        final coins = await _monetization.getMyCoins();
 
         setState(() {
           _story = story;
@@ -66,24 +77,25 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
           _isFollowing = following;
           _isDownloaded = downloaded;
           _progressPercent = progress?.progressPercent ?? 0;
+          _hasAccess = access;
+          _userCoins = coins;
           _isOfflineMode = false;
           _isLoading = false;
         });
         return;
       }
-    } catch (_) {
-      // নেটওয়ার্ক এরর — offline চেষ্টা
-    }
+    } catch (_) {}
 
-    // Offline fallback
     final offlineStories = await _offlineService.getOfflineStories();
-    final offline = offlineStories.where((s) => s.id == widget.storyId).toList();
+    final offline =
+        offlineStories.where((s) => s.id == widget.storyId).toList();
 
     if (offline.isNotEmpty) {
       setState(() {
         _story = offline.first;
         _isOfflineMode = true;
         _isDownloaded = true;
+        _hasAccess = true;
         _isLoading = false;
       });
     } else {
@@ -91,6 +103,28 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
         _error = 'গল্প লোড করা যায়নি (অফলাইনেও নেই)';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _tryUnlock() async {
+    try {
+      await _monetization.spendCoins(
+        type: 'spend_story',
+        amount: CoinConstants.storyOpen,
+        refType: 'story',
+        refId: widget.storyId,
+      );
+      setState(() => _hasAccess = true);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'কয়েন কাটার সার্ভার এখনো যুক্ত হয়নি। মনিটাইজেশন OFF রাখুন অথবা পরে RPC যোগ করুন।',
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -144,7 +178,8 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
             return Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
                 children: [
@@ -175,7 +210,9 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_isBookmarked ? 'সংরক্ষণ করা হয়েছে' : 'সংরক্ষণ সরানো হয়েছে'),
+            content: Text(
+              _isBookmarked ? 'সংরক্ষণ করা হয়েছে' : 'সংরক্ষণ সরানো হয়েছে',
+            ),
             duration: const Duration(seconds: 1),
           ),
         );
@@ -192,7 +229,7 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
   }
 
   Future<void> _toggleDownload() async {
-    if (_story == null) return;
+    if (_story == null || !_hasAccess) return;
     if (_isDownloaded) {
       await _offlineService.removeStoryOffline(widget.storyId);
       setState(() => _isDownloaded = false);
@@ -226,7 +263,7 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
             ? const Text('অফলাইন', style: TextStyle(fontSize: 14))
             : null,
         actions: [
-          if (_progressPercent > 0)
+          if (_hasAccess && _progressPercent > 0)
             Padding(
               padding: const EdgeInsets.only(right: 4),
               child: Center(
@@ -240,14 +277,15 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
                 ),
               ),
             ),
-          IconButton(
-            icon: Icon(
-              _isDownloaded ? Icons.download_done : Icons.download_outlined,
-              color: _isDownloaded ? AppColors.primary : null,
+          if (_hasAccess)
+            IconButton(
+              icon: Icon(
+                _isDownloaded ? Icons.download_done : Icons.download_outlined,
+                color: _isDownloaded ? AppColors.primary : null,
+              ),
+              onPressed: _toggleDownload,
             ),
-            onPressed: _toggleDownload,
-          ),
-          if (!_isOfflineMode)
+          if (_hasAccess && !_isOfflineMode)
             IconButton(
               icon: Icon(
                 _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
@@ -258,9 +296,10 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
         ],
       ),
       body: _buildBody(isDark),
-      bottomNavigationBar: _story == null || _isOfflineMode
-          ? null
-          : _buildBottomBar(isDark),
+      bottomNavigationBar:
+          _story == null || _isOfflineMode || !_hasAccess
+              ? null
+              : _buildBottomBar(isDark),
     );
   }
 
@@ -285,6 +324,15 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
       );
     }
 
+    if (!_hasAccess) {
+      return UnlockPaywall(
+        title: _story!.title,
+        cost: CoinConstants.storyOpen,
+        userCoins: _userCoins,
+        onUnlockPressed: _tryUnlock,
+      );
+    }
+
     final story = _story!;
 
     return NotificationListener<ScrollNotification>(
@@ -293,7 +341,8 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
           final metrics = notification.metrics;
           if (metrics.maxScrollExtent > 0) {
             final percent =
-                (metrics.pixels / metrics.maxScrollExtent * 100).clamp(0.0, 100.0);
+                (metrics.pixels / metrics.maxScrollExtent * 100)
+                    .clamp(0.0, 100.0);
             if ((percent - _progressPercent).abs() > 5) {
               _progressPercent = percent;
               _progressService.saveProgress(
@@ -308,132 +357,134 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
       },
       child: Column(
         children: [
-          // Progress bar
           if (_progressPercent > 0)
             LinearProgressIndicator(
               value: _progressPercent / 100,
-              backgroundColor: isDark
-                  ? AppColors.darkBorder
-                  : AppColors.lightBorder,
+              backgroundColor:
+                  isDark ? AppColors.darkBorder : AppColors.lightBorder,
               color: AppColors.primary,
               minHeight: 3,
             ),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    story.title,
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      height: 1.35,
-                      color: isDark
-                          ? AppColors.darkTextPrimary
-                          : AppColors.lightTextPrimary,
+            child: SelectionContainer.disabled(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      story.title,
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        height: 1.35,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundColor: AppColors.primary.withOpacity(0.15),
-                        backgroundImage: story.authorAvatar != null
-                            ? CachedNetworkImageProvider(story.authorAvatar!)
-                            : null,
-                        child: story.authorAvatar == null
-                            ? Text(
-                                (story.authorName ?? 'U')[0].toUpperCase(),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                  fontSize: 14,
-                                ),
-                              )
-                            : null,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          story.authorName ?? 'অজানা লেখক',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: isDark
-                                ? AppColors.darkTextPrimary
-                                : AppColors.lightTextPrimary,
-                          ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: AppColors.primary.withOpacity(0.15),
+                          backgroundImage: story.authorAvatar != null
+                              ? CachedNetworkImageProvider(story.authorAvatar!)
+                              : null,
+                          child: story.authorAvatar == null
+                              ? Text(
+                                  (story.authorName ?? 'U')[0].toUpperCase(),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                    fontSize: 14,
+                                  ),
+                                )
+                              : null,
                         ),
-                      ),
-                      if (!_isOfflineMode)
-                        SizedBox(
-                          height: 34,
-                          child: OutlinedButton(
-                            onPressed: _toggleFollow,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              side: const BorderSide(color: AppColors.primary),
-                              padding: const EdgeInsets.symmetric(horizontal: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
-                            child: Text(
-                              _isFollowing ? 'আনফলো' : 'ফলো',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  ...story.contentBlocks.map((block) {
-                    if (block.isText) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Text(
-                          block.value,
-                          style: TextStyle(
-                            fontSize: 17,
-                            height: 1.75,
-                            color: isDark
-                                ? AppColors.darkTextPrimary
-                                : AppColors.lightTextPrimary,
-                          ),
-                        ),
-                      );
-                    } else if (block.isImage) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: CachedNetworkImage(
-                            imageUrl: block.value,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => Container(
-                              height: 200,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            story.authorName ?? 'অজানা লেখক',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
                               color: isDark
-                                  ? AppColors.darkSurface
-                                  : AppColors.lightBorder,
-                              child: const Center(
-                                  child: CircularProgressIndicator()),
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
                             ),
-                            errorWidget: (_, __, ___) =>
-                                const Icon(Icons.broken_image, size: 48),
                           ),
                         ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  }),
-                ],
+                        if (!_isOfflineMode)
+                          SizedBox(
+                            height: 34,
+                            child: OutlinedButton(
+                              onPressed: _toggleFollow,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.primary,
+                                side: const BorderSide(color: AppColors.primary),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
+                              child: Text(
+                                _isFollowing ? 'আনফলো' : 'ফলো',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    ...story.contentBlocks.map((block) {
+                      if (block.isText) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text(
+                            block.value,
+                            style: TextStyle(
+                              fontSize: 17,
+                              height: 1.75,
+                              color: isDark
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                        );
+                      } else if (block.isImage) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: CachedNetworkImage(
+                              imageUrl: block.value,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => Container(
+                                height: 200,
+                                color: isDark
+                                    ? AppColors.darkSurface
+                                    : AppColors.lightBorder,
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
+                              errorWidget: (_, __, ___) =>
+                                  const Icon(Icons.broken_image, size: 48),
+                            ),
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    }),
+                  ],
+                ),
               ),
             ),
           ),
@@ -461,7 +512,8 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
               onTap: _showReactionPicker,
               borderRadius: BorderRadius.circular(8),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 child: Row(
                   children: [
                     Icon(
@@ -494,7 +546,8 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
               onTap: _showComments,
               borderRadius: BorderRadius.circular(8),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 child: Row(
                   children: [
                     Icon(
