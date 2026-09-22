@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/models/user_model.dart';
-import '../../../../core/services/admin_service.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/follow_service.dart';
+import '../../../../core/services/admin_service.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class UserProfileScreen extends ConsumerStatefulWidget {
@@ -18,8 +18,11 @@ class UserProfileScreen extends ConsumerStatefulWidget {
 class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   final _authService = AuthService();
   final _followService = FollowService();
+  final _adminService = AdminService();
+
   UserModel? _profile;
   bool _isLoading = true;
+  bool _isAdmin = false;
   int _followerCount = 0;
   int _followingCount = 0;
 
@@ -31,21 +34,22 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
 
   Future<void> _loadProfile() async {
     final profile = await _authService.getCurrentProfile();
+    final admin = await _adminService.isCurrentUserAdmin();
     if (profile != null) {
       final followers = await _followService.getFollowerCount(profile.id);
       final following = await _followService.getFollowingCount(profile.id);
-      if (mounted) {
-        setState(() {
-          _profile = profile;
-          _followerCount = followers;
-          _followingCount = following;
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _profile = profile;
+        _isAdmin = admin;
+        _followerCount = followers;
+        _followingCount = following;
+        _isLoading = false;
+      });
     } else {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      setState(() {
+        _isAdmin = admin;
+        _isLoading = false;
+      });
     }
   }
 
@@ -118,6 +122,15 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                               ),
                             ),
                           ],
+                          const SizedBox(height: 12),
+                          Text(
+                            '${_profile!.coins} কয়েন',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primary,
+                            ),
+                          ),
                           const SizedBox(height: 16),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -154,6 +167,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                       },
                     ),
                     _ProfileMenuItem(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'ওয়ালেট / কয়েন আয়',
+                      onTap: () => context.push('/wallet'),
+                    ),
+                    _ProfileMenuItem(
                       icon: Icons.library_books_outlined,
                       title: 'আমার লেখা',
                       onTap: () => context.push('/my-works'),
@@ -173,19 +191,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                       title: 'ডাউনলোড করা কনটেন্ট',
                       onTap: () => context.push('/offline'),
                     ),
-                    FutureBuilder<bool>(
-                      future: AdminService().isCurrentUserAdmin(),
-                      builder: (context, snap) {
-                        if (snap.data == true) {
-                          return _ProfileMenuItem(
-                            icon: Icons.admin_panel_settings_outlined,
-                            title: 'অ্যাডমিন প্যানেল',
-                            onTap: () => context.push('/admin'),
-                          );
-                        }
-                        return const SizedBox.shrink();
-                      },
-                    ),
+                    if (_isAdmin)
+                      _ProfileMenuItem(
+                        icon: Icons.admin_panel_settings_outlined,
+                        title: 'অ্যাডমিন প্যানেল',
+                        onTap: () => context.push('/admin'),
+                      ),
                     const Divider(height: 32),
                     _ProfileMenuItem(
                       icon: Icons.logout,
