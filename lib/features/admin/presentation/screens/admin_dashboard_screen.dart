@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/services/admin_service.dart';
+import '../../../../core/services/monetization_service.dart';
 import '../../../../core/models/story_model.dart';
 import '../../../../core/models/novel_model.dart';
 import '../../../../core/models/user_model.dart';
@@ -16,10 +17,12 @@ class AdminDashboardScreen extends StatefulWidget {
 class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     with SingleTickerProviderStateMixin {
   final _adminService = AdminService();
+  final _monetization = MonetizationService();
   late TabController _tabController;
 
   bool _isLoading = true;
   bool _isAdmin = false;
+  bool _monetizationOn = false;
   Map<String, int> _stats = {};
   List<StoryModel> _stories = [];
   List<NovelModel> _novels = [];
@@ -48,6 +51,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       return;
     }
 
+    final mono = await _monetization.isMonetizationEnabled();
     final stats = await _adminService.getStats();
     final stories = await _adminService.getAllStories();
     final novels = await _adminService.getAllNovels();
@@ -55,6 +59,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
     setState(() {
       _isAdmin = true;
+      _monetizationOn = mono;
       _stats = stats;
       _stories = stories;
       _novels = novels;
@@ -66,6 +71,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _refresh() async {
     setState(() => _isLoading = true);
     await _init();
+  }
+
+  Future<void> _toggleMonetization(bool value) async {
+    try {
+      await _monetization.setMonetizationEnabled(value);
+      setState(() => _monetizationOn = value);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              value
+                  ? 'মনিটাইজেশন চালু — অ্যাড ও কয়েন সক্রিয়'
+                  : 'মনিটাইজেশন বন্ধ — সব ফ্রি, ডেটা সেভ আছে',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('টগল ব্যর্থ: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -81,9 +110,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (!_isAdmin) {
       return Scaffold(
         appBar: AppBar(title: const Text('অ্যাডমিন')),
-        body: const Center(
-          child: Text('অ্যাডমিন অ্যাক্সেস নেই'),
-        ),
+        body: const Center(child: Text('অ্যাডমিন অ্যাক্সেস নেই')),
       );
     }
 
@@ -116,9 +143,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         controller: _tabController,
         children: [
           _buildDashboard(isDark),
-          _buildStories(isDark),
-          _buildNovels(isDark),
-          _buildUsers(isDark),
+          _buildStories(),
+          _buildNovels(),
+          _buildUsers(),
         ],
       ),
     );
@@ -128,6 +155,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        SwitchListTile(
+          title: const Text('মনিটাইজেশন'),
+          subtitle: Text(
+            _monetizationOn
+                ? 'চালু — বিজ্ঞাপন ও কয়েন সক্রিয়'
+                : 'বন্ধ — কনটেন্ট ফ্রি, পুরনো ডেটা সেভ',
+          ),
+          value: _monetizationOn,
+          activeColor: AppColors.primary,
+          onChanged: _toggleMonetization,
+        ),
+        const Divider(height: 24),
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -141,7 +180,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ),
         const SizedBox(height: 24),
         Text(
-          'মডারেশন: গল্প/উপন্যাস ট্যাব থেকে আনপাবলিশ বা ডিলিট করতে পারবেন।',
+          'মডারেশন: গল্প/উপন্যাস ট্যাব থেকে আনপাবলিশ বা ডিলিট।\n'
+          'কয়েন খরচ/আয়ের বিস্তারিত স্ট্যাট AppLovin যুক্ত হলে বাড়বে।',
           style: TextStyle(
             fontSize: 13,
             color: isDark
@@ -153,11 +193,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  Widget _buildStories(bool isDark) {
+  Widget _buildStories() {
     if (_stories.isEmpty) {
       return const Center(child: Text('কোনো গল্প নেই'));
     }
-
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: _stories.length,
@@ -194,11 +233,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  Widget _buildNovels(bool isDark) {
+  Widget _buildNovels() {
     if (_novels.isEmpty) {
       return const Center(child: Text('কোনো উপন্যাস নেই'));
     }
-
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: _novels.length,
@@ -233,11 +271,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  Widget _buildUsers(bool isDark) {
+  Widget _buildUsers() {
     if (_users.isEmpty) {
       return const Center(child: Text('কোনো ইউজার নেই'));
     }
-
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: _users.length,
@@ -257,7 +294,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ),
             ),
             title: Text(u.fullName ?? 'নাম নেই'),
-            subtitle: Text(u.username != null ? '@${u.username}' : u.id),
+            subtitle: Text(
+              '\( {u.username != null ? "@ \){u.username}" : u.id} • ${u.coins} কয়েন',
+            ),
             trailing: u.isAdmin
                 ? const Chip(
                     label: Text('Admin', style: TextStyle(fontSize: 11)),
