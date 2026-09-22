@@ -5,6 +5,8 @@ class UserModel {
   final String? bio;
   final String? avatarUrl;
   final bool isAdmin;
+  final String role;
+  final int coins;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -15,6 +17,8 @@ class UserModel {
     this.bio,
     this.avatarUrl,
     this.isAdmin = false,
+    this.role = 'user',
+    this.coins = 0,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -27,6 +31,8 @@ class UserModel {
       bio: json['bio'] as String?,
       avatarUrl: json['avatar_url'] as String?,
       isAdmin: json['is_admin'] as bool? ?? false,
+      role: json['role'] as String? ?? 'user',
+      coins: (json['coins'] as num?)?.toInt() ?? 0,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
@@ -40,6 +46,8 @@ class UserModel {
       'bio': bio,
       'avatar_url': avatarUrl,
       'is_admin': isAdmin,
+      'role': role,
+      'coins': coins,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -51,6 +59,8 @@ class UserModel {
     String? bio,
     String? avatarUrl,
     bool? isAdmin,
+    String? role,
+    int? coins,
   }) {
     return UserModel(
       id: id,
@@ -59,6 +69,8 @@ class UserModel {
       bio: bio ?? this.bio,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       isAdmin: isAdmin ?? this.isAdmin,
+      role: role ?? this.role,
+      coins: coins ?? this.coins,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );
