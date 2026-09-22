@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/models/episode_model.dart';
+import '../../../../core/constants/coin_constants.dart';
 import '../../../../core/services/novel_service.dart';
 import '../../../../core/services/offline_service.dart';
 import '../../../../core/services/reading_progress_service.dart';
+import '../../../../core/services/monetization_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../social/presentation/widgets/comment_section.dart';
+import '../../../wallet/presentation/widgets/unlock_paywall.dart';
 
 class EpisodeReaderScreen extends ConsumerStatefulWidget {
   final String episodeId;
@@ -23,6 +26,7 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
   final _novelService = NovelService();
   final _offlineService = OfflineService();
   final _progressService = ReadingProgressService();
+  final _monetization = MonetizationService();
 
   EpisodeModel? _episode;
   List<EpisodeModel> _allEpisodes = [];
@@ -30,6 +34,8 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
   String? _error;
   bool _isDownloaded = false;
   bool _isOfflineMode = false;
+  bool _hasAccess = true;
+  int _userCoins = 0;
   double _progressPercent = 0;
 
   @override
@@ -37,6 +43,17 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
     super.initState();
     _loadEpisode();
   }
+
+  bool get _isFirstEpisode {
+    if (_episode == null || _allEpisodes.isEmpty) return true;
+    final sorted = [..._allEpisodes]
+      ..sort((a, b) => a.episodeNumber.compareTo(b.episodeNumber));
+    return sorted.first.id == _episode!.id;
+  }
+
+  int get _unlockCost => _isFirstEpisode
+      ? CoinConstants.novelFirstEpisode
+      : CoinConstants.novelNextEpisode;
 
   Future<void> _loadEpisode() async {
     try {
@@ -47,12 +64,17 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
             await _offlineService.isEpisodeDownloaded(widget.episodeId);
         final progress =
             await _progressService.getProgress(episodeId: widget.episodeId);
+        final access =
+            await _monetization.canAccessEpisode(widget.episodeId);
+        final coins = await _monetization.getMyCoins();
 
         setState(() {
           _episode = episode;
           _allEpisodes = episodes;
           _isDownloaded = downloaded;
           _progressPercent = progress?.progressPercent ?? 0;
+          _hasAccess = access;
+          _userCoins = coins;
           _isOfflineMode = false;
           _isLoading = false;
         });
@@ -60,7 +82,6 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
       }
     } catch (_) {}
 
-    // Offline fallback
     final list = await _offlineService.getOfflineEpisodes();
     final found = list.where((e) => e.id == widget.episodeId).toList();
     if (found.isNotEmpty) {
@@ -68,6 +89,7 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
         _episode = found.first;
         _isDownloaded = true;
         _isOfflineMode = true;
+        _hasAccess = true;
         _isLoading = false;
       });
     } else {
@@ -75,6 +97,28 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
         _error = 'পর্ব লোড করা যায়নি';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _tryUnlock() async {
+    try {
+      await _monetization.spendCoins(
+        type: _isFirstEpisode ? 'spend_first_episode' : 'spend_next_episode',
+        amount: _unlockCost,
+        refType: 'episode',
+        refId: widget.episodeId,
+      );
+      setState(() => _hasAccess = true);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'কয়েন কাটার সার্ভার এখনো যুক্ত হয়নি। মনিটাইজেশন OFF রাখুন অথবা পরে RPC যোগ করুন।',
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -95,7 +139,7 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
   }
 
   Future<void> _toggleDownload() async {
-    if (_episode == null) return;
+    if (_episode == null || !_hasAccess) return;
     if (_isDownloaded) {
       await _offlineService.removeEpisodeOffline(widget.episodeId);
       setState(() => _isDownloaded = false);
@@ -180,7 +224,7 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
               )
             : null,
         actions: [
-          if (_progressPercent > 0)
+          if (_hasAccess && _progressPercent > 0)
             Padding(
               padding: const EdgeInsets.only(right: 4),
               child: Center(
@@ -194,17 +238,19 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
                 ),
               ),
             ),
-          IconButton(
-            icon: Icon(
-              _isDownloaded ? Icons.download_done : Icons.download_outlined,
-              color: _isDownloaded ? AppColors.primary : null,
+          if (_hasAccess)
+            IconButton(
+              icon: Icon(
+                _isDownloaded ? Icons.download_done : Icons.download_outlined,
+                color: _isDownloaded ? AppColors.primary : null,
+              ),
+              onPressed: _toggleDownload,
             ),
-            onPressed: _toggleDownload,
-          ),
         ],
       ),
       body: _buildBody(isDark),
-      bottomNavigationBar: _episode == null ? null : _buildBottomBar(isDark),
+      bottomNavigationBar:
+          _episode == null || !_hasAccess ? null : _buildBottomBar(isDark),
     );
   }
 
@@ -216,6 +262,15 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
       return Center(child: Text(_error ?? 'পর্ব পাওয়া যায়নি'));
     }
 
+    if (!_hasAccess) {
+      return UnlockPaywall(
+        title: _episode!.title,
+        cost: _unlockCost,
+        userCoins: _userCoins,
+        onUnlockPressed: _tryUnlock,
+      );
+    }
+
     final ep = _episode!;
 
     return NotificationListener<ScrollNotification>(
@@ -224,7 +279,8 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
           final metrics = notification.metrics;
           if (metrics.maxScrollExtent > 0) {
             final percent =
-                (metrics.pixels / metrics.maxScrollExtent * 100).clamp(0.0, 100.0);
+                (metrics.pixels / metrics.maxScrollExtent * 100)
+                    .clamp(0.0, 100.0);
             if ((percent - _progressPercent).abs() > 5) {
               _progressPercent = percent;
               _progressService.saveProgress(
@@ -248,64 +304,67 @@ class _EpisodeReaderScreenState extends ConsumerState<EpisodeReaderScreen> {
               minHeight: 3,
             ),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    ep.title,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      height: 1.35,
-                      color: isDark
-                          ? AppColors.darkTextPrimary
-                          : AppColors.lightTextPrimary,
+            child: SelectionContainer.disabled(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ep.title,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        height: 1.35,
+                        color: isDark
+                            ? AppColors.darkTextPrimary
+                            : AppColors.lightTextPrimary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  ...ep.contentBlocks.map((block) {
-                    if (block.isText) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Text(
-                          block.value,
-                          style: TextStyle(
-                            fontSize: 17,
-                            height: 1.75,
-                            color: isDark
-                                ? AppColors.darkTextPrimary
-                                : AppColors.lightTextPrimary,
-                          ),
-                        ),
-                      );
-                    } else if (block.isImage) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: CachedNetworkImage(
-                            imageUrl: block.value,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => Container(
-                              height: 200,
+                    const SizedBox(height: 24),
+                    ...ep.contentBlocks.map((block) {
+                      if (block.isText) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text(
+                            block.value,
+                            style: TextStyle(
+                              fontSize: 17,
+                              height: 1.75,
                               color: isDark
-                                  ? AppColors.darkSurface
-                                  : AppColors.lightBorder,
-                              child: const Center(
-                                  child: CircularProgressIndicator()),
+                                  ? AppColors.darkTextPrimary
+                                  : AppColors.lightTextPrimary,
                             ),
-                            errorWidget: (_, __, ___) =>
-                                const Icon(Icons.broken_image, size: 48),
                           ),
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  }),
-                ],
+                        );
+                      } else if (block.isImage) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: CachedNetworkImage(
+                              imageUrl: block.value,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => Container(
+                                height: 200,
+                                color: isDark
+                                    ? AppColors.darkSurface
+                                    : AppColors.lightBorder,
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
+                              errorWidget: (_, __, ___) =>
+                                  const Icon(Icons.broken_image, size: 48),
+                            ),
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    }),
+                  ],
+                ),
               ),
             ),
           ),
