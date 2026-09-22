@@ -14,6 +14,13 @@ class SupabaseConstants {
   static const String bookmarks = 'bookmarks';
   static const String readingProgress = 'reading_progress';
 
+  // Monetization tables
+  static const String appSettings = 'app_settings';
+  static const String coinTransactions = 'coin_transactions';
+  static const String contentUnlocks = 'content_unlocks';
+  static const String adWatchLog = 'ad_watch_log';
+  static const String withdrawRequests = 'withdraw_requests';
+
   // Storage
   static const String storyImagesBucket = 'story_images';
 }
