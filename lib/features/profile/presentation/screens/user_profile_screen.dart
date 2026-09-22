@@ -172,6 +172,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                       onTap: () => context.push('/wallet'),
                     ),
                     _ProfileMenuItem(
+                      icon: Icons.insights_outlined,
+                      title: 'লেখক আয়',
+                      onTap: () => context.push('/writer-earnings'),
+                    ),
+                    _ProfileMenuItem(
                       icon: Icons.library_books_outlined,
                       title: 'আমার লেখা',
                       onTap: () => context.push('/my-works'),
