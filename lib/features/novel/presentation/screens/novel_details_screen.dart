@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/models/novel_model.dart';
 import '../../../../core/models/episode_model.dart';
+import '../../../../core/constants/coin_constants.dart';
 import '../../../../core/services/novel_service.dart';
 import '../../../../core/services/bookmark_service.dart';
+import '../../../../core/services/monetization_service.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class NovelDetailsScreen extends ConsumerStatefulWidget {
@@ -20,9 +22,12 @@ class NovelDetailsScreen extends ConsumerStatefulWidget {
 class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
   final _novelService = NovelService();
   final _bookmarkService = BookmarkService();
+  final _monetization = MonetizationService();
 
   NovelModel? _novel;
   List<EpisodeModel> _episodes = [];
+  final Map<String, bool> _unlocked = {};
+  bool _monetizationOn = false;
   bool _isLoading = true;
   String? _error;
   bool _isBookmarked = false;
@@ -39,11 +44,26 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
       final episodes = await _novelService.getEpisodes(widget.novelId);
       final bookmarked =
           await _bookmarkService.isBookmarked(novelId: widget.novelId);
+      final monoOn = await _monetization.isMonetizationEnabled();
+
+      final unlockMap = <String, bool>{};
+      if (monoOn) {
+        for (final ep in episodes) {
+          unlockMap[ep.id] = await _monetization.isEpisodeUnlocked(ep.id);
+        }
+      } else {
+        for (final ep in episodes) {
+          unlockMap[ep.id] = true;
+        }
+      }
 
       setState(() {
         _novel = novel;
         _episodes = episodes;
         _isBookmarked = bookmarked;
+        _monetizationOn = monoOn;
+        _unlocked.clear();
+        _unlocked.addAll(unlockMap);
         _isLoading = false;
       });
     } catch (e) {
@@ -54,11 +74,20 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
     }
   }
 
+  int _costFor(EpisodeModel ep) {
+    if (_episodes.isEmpty) return CoinConstants.novelFirstEpisode;
+    final sorted = [..._episodes]
+      ..sort((a, b) => a.episodeNumber.compareTo(b.episodeNumber));
+    if (sorted.first.id == ep.id) {
+      return CoinConstants.novelFirstEpisode;
+    }
+    return CoinConstants.novelNextEpisode;
+  }
+
   Future<void> _toggleBookmark() async {
     try {
       await _bookmarkService.toggleBookmark(novelId: widget.novelId);
       setState(() => _isBookmarked = !_isBookmarked);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -160,14 +189,16 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
                   : null,
             ),
             const SizedBox(width: 10),
-            Text(
-              novel.authorName ?? 'অজানা লেখক',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: isDark
-                    ? AppColors.darkTextPrimary
-                    : AppColors.lightTextPrimary,
+            Expanded(
+              child: Text(
+                novel.authorName ?? 'অজানা লেখক',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: isDark
+                      ? AppColors.darkTextPrimary
+                      : AppColors.lightTextPrimary,
+                ),
               ),
             ),
           ],
@@ -194,10 +225,25 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
             color: AppColors.primary,
           ),
         ),
+        if (_monetizationOn) ...[
+          const SizedBox(height: 6),
+          Text(
+            'প্রথম পর্ব ${CoinConstants.novelFirstEpisode} কয়েন • পরের পর্ব ${CoinConstants.novelNextEpisode} কয়েন',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark
+                  ? AppColors.darkTextSecondary
+                  : AppColors.lightTextSecondary,
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         const Divider(),
         const SizedBox(height: 8),
         ..._episodes.map((ep) {
+          final unlocked = _unlocked[ep.id] ?? !_monetizationOn;
+          final cost = _costFor(ep);
+
           return ListTile(
             contentPadding: EdgeInsets.zero,
             leading: CircleAvatar(
@@ -230,11 +276,37 @@ class _NovelDetailsScreenState extends ConsumerState<NovelDetailsScreen> {
                     : AppColors.lightTextSecondary,
               ),
             ),
-            trailing: IconButton(
-              icon: const Icon(Icons.edit_outlined, size: 20),
-              onPressed: () {
-                context.push('/edit-episode/${ep.id}');
-              },
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_monetizationOn)
+                  unlocked
+                      ? const Icon(Icons.lock_open, size: 18, color: Colors.green)
+                      : Tooltip(
+                          message: '$cost কয়েন',
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '$cost',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 2),
+                              const Icon(Icons.lock, size: 18, color: AppColors.primary),
+                            ],
+                          ),
+                        ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                  onPressed: () {
+                    context.push('/edit-episode/${ep.id}');
+                  },
+                ),
+              ],
             ),
             onTap: () {
               context.push('/episode/${ep.id}');
