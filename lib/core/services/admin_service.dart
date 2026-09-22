@@ -7,7 +7,6 @@ import '../models/user_model.dart';
 class AdminService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  /// বর্তমান ইউজার admin কিনা
   Future<bool> isCurrentUserAdmin() async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) return false;
@@ -21,7 +20,6 @@ class AdminService {
     return data?['is_admin'] == true;
   }
 
-  /// Dashboard stats
   Future<Map<String, int>> getStats() async {
     final users = await _client.from(SupabaseConstants.profiles).select('id');
     final stories = await _client
@@ -44,7 +42,49 @@ class AdminService {
     };
   }
 
-  /// সব published গল্প (মডারেশন)
+  /// মনিটাইজেশন স্ট্যাট (টেবিল না থাকলে ০)
+  Future<Map<String, int>> getMonetizationStats() async {
+    try {
+      final txs = await _client
+          .from(SupabaseConstants.coinTransactions)
+          .select('amount, type');
+      final unlocks =
+          await _client.from(SupabaseConstants.contentUnlocks).select('id');
+      final ads = await _client.from(SupabaseConstants.adWatchLog).select('id');
+      final withdraws = await _client
+          .from(SupabaseConstants.withdrawRequests)
+          .select('id')
+          .eq('status', 'pending');
+
+      int earned = 0;
+      int spent = 0;
+      for (final t in (txs as List)) {
+        final amount = (t['amount'] as num?)?.toInt() ?? 0;
+        if (amount >= 0) {
+          earned += amount;
+        } else {
+          spent += amount.abs();
+        }
+      }
+
+      return {
+        'coins_earned': earned,
+        'coins_spent': spent,
+        'unlocks': (unlocks as List).length,
+        'ads_watched': (ads as List).length,
+        'pending_withdraws': (withdraws as List).length,
+      };
+    } catch (_) {
+      return {
+        'coins_earned': 0,
+        'coins_spent': 0,
+        'unlocks': 0,
+        'ads_watched': 0,
+        'pending_withdraws': 0,
+      };
+    }
+  }
+
   Future<List<StoryModel>> getAllStories({int limit = 50}) async {
     final data = await _client
         .from(SupabaseConstants.stories)
@@ -65,7 +105,6 @@ class AdminService {
     }).toList();
   }
 
-  /// গল্প আনপাবলিশ (হাইড)
   Future<void> unpublishStory(String storyId) async {
     await _client.from(SupabaseConstants.stories).update({
       'is_published': false,
@@ -73,12 +112,10 @@ class AdminService {
     }).eq('id', storyId);
   }
 
-  /// গল্প ডিলিট
   Future<void> deleteStory(String storyId) async {
     await _client.from(SupabaseConstants.stories).delete().eq('id', storyId);
   }
 
-  /// সব উপন্যাস
   Future<List<NovelModel>> getAllNovels({int limit = 50}) async {
     final data = await _client
         .from(SupabaseConstants.novels)
@@ -99,7 +136,6 @@ class AdminService {
     }).toList();
   }
 
-  /// উপন্যাস আনপাবলিশ
   Future<void> unpublishNovel(String novelId) async {
     await _client.from(SupabaseConstants.novels).update({
       'is_published': false,
@@ -107,12 +143,10 @@ class AdminService {
     }).eq('id', novelId);
   }
 
-  /// উপন্যাস ডিলিট
   Future<void> deleteNovel(String novelId) async {
     await _client.from(SupabaseConstants.novels).delete().eq('id', novelId);
   }
 
-  /// ইউজার লিস্ট
   Future<List<UserModel>> getAllUsers({int limit = 50}) async {
     final data = await _client
         .from(SupabaseConstants.profiles)
