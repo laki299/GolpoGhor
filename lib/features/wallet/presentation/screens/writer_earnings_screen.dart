@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/services/writer_earnings_service.dart';
 import '../../../../core/theme/app_colors.dart';
 
@@ -77,6 +78,12 @@ class _WriterEarningsScreenState extends State<WriterEarningsScreen> {
                                   ? AppColors.darkTextSecondary
                                   : AppColors.lightTextSecondary,
                             ),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: () => context.push('/withdraw'),
+                            icon: const Icon(Icons.payments_outlined),
+                            label: const Text('উইথড্র রিকোয়েস্ট'),
                           ),
                         ],
                       ),
