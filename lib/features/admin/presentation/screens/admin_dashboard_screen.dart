@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/services/admin_service.dart';
 import '../../../../core/services/monetization_service.dart';
+import '../../../../core/services/withdraw_service.dart';
 import '../../../../core/models/story_model.dart';
 import '../../../../core/models/novel_model.dart';
 import '../../../../core/models/user_model.dart';
@@ -18,6 +19,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     with SingleTickerProviderStateMixin {
   final _adminService = AdminService();
   final _monetization = MonetizationService();
+  final _withdrawService = WithdrawService();
   late TabController _tabController;
 
   bool _isLoading = true;
@@ -27,11 +29,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   List<StoryModel> _stories = [];
   List<NovelModel> _novels = [];
   List<UserModel> _users = [];
+  List<Map<String, dynamic>> _withdraws = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _init();
   }
 
@@ -56,6 +59,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final stories = await _adminService.getAllStories();
     final novels = await _adminService.getAllNovels();
     final users = await _adminService.getAllUsers();
+    final withdraws = await _withdrawService.getPendingForAdmin();
 
     setState(() {
       _isAdmin = true;
@@ -64,6 +68,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       _stories = stories;
       _novels = novels;
       _users = users;
+      _withdraws = withdraws;
       _isLoading = false;
     });
   }
@@ -97,6 +102,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     }
   }
 
+  Future<void> _handleWithdraw(String id, String status) async {
+    try {
+      await _withdrawService.updateStatus(id: id, status: status);
+      await _refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              status == 'approved'
+                  ? 'অনুমোদিত'
+                  : status == 'paid'
+                      ? 'পেমেন্ট সম্পন্ন'
+                      : 'বাতিল করা হয়েছে',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('সমস্যা: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -125,11 +156,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ? AppColors.darkTextSecondary
               : AppColors.lightTextSecondary,
           indicatorColor: AppColors.primary,
-          tabs: const [
-            Tab(text: 'ড্যাশবোর্ড'),
-            Tab(text: 'গল্প'),
-            Tab(text: 'উপন্যাস'),
-            Tab(text: 'ইউজার'),
+          tabs: [
+            const Tab(text: 'ড্যাশবোর্ড'),
+            const Tab(text: 'গল্প'),
+            const Tab(text: 'উপন্যাস'),
+            const Tab(text: 'ইউজার'),
+            Tab(
+              text: _withdraws.isEmpty
+                  ? 'উইথড্র'
+                  : 'উইথড্র (${_withdraws.length})',
+            ),
           ],
         ),
         actions: [
@@ -146,6 +182,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           _buildStories(),
           _buildNovels(),
           _buildUsers(),
+          _buildWithdraws(isDark),
         ],
       ),
     );
@@ -176,12 +213,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             _StatCard(title: 'খসড়া', value: '${_stats['drafts'] ?? 0}'),
             _StatCard(title: 'উপন্যাস', value: '${_stats['novels'] ?? 0}'),
             _StatCard(title: 'কমেন্ট', value: '${_stats['comments'] ?? 0}'),
+            _StatCard(
+              title: 'উইথড্র পেন্ডিং',
+              value: '${_withdraws.length}',
+            ),
           ],
         ),
         const SizedBox(height: 24),
         Text(
           'মডারেশন: গল্প/উপন্যাস ট্যাব থেকে আনপাবলিশ বা ডিলিট।\n'
-          'কয়েন খরচ/আয়ের বিস্তারিত স্ট্যাট AppLovin যুক্ত হলে বাড়বে।',
+          'উইথড্র ট্যাব থেকে লেখকের রিকোয়েস্ট অনুমোদন/বাতিল।',
           style: TextStyle(
             fontSize: 13,
             color: isDark
@@ -190,6 +231,72 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildWithdraws(bool isDark) {
+    if (_withdraws.isEmpty) {
+      return const Center(child: Text('কোনো পেন্ডিং উইথড্র নেই'));
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: _withdraws.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final w = _withdraws[index];
+        final profile = w['profiles'];
+        final name = profile is Map
+            ? (profile['full_name'] ?? profile['username'] ?? 'ইউজার')
+            : 'ইউজার';
+        final coins = w['coins'];
+        final id = w['id'] as String;
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$name',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$coins কয়েন',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => _handleWithdraw(id, 'approved'),
+                      child: const Text('অনুমোদন'),
+                    ),
+                    TextButton(
+                      onPressed: () => _handleWithdraw(id, 'paid'),
+                      child: const Text('পেড'),
+                    ),
+                    TextButton(
+                      onPressed: () => _handleWithdraw(id, 'rejected'),
+                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                      child: const Text('বাতিল'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
