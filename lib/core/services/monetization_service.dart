@@ -21,7 +21,6 @@ class MonetizationService {
     }
   }
 
-  /// Admin only — production-এ Edge/RPC দিয়ে সুরক্ষিত করবে
   Future<void> setMonetizationEnabled(bool enabled) async {
     await _client.from(SupabaseConstants.appSettings).upsert({
       'key': 'monetization',
@@ -65,7 +64,6 @@ class MonetizationService {
     return row != null;
   }
 
-  /// OFF হলে সবসময় true
   Future<bool> canAccessStory(String storyId) async {
     if (!await isMonetizationEnabled()) return true;
     return isStoryUnlocked(storyId);
@@ -91,7 +89,8 @@ class MonetizationService {
     if (data == null) return Duration.zero;
 
     final last = DateTime.parse(data['created_at'] as String).toUtc();
-    final next = last.add(const Duration(seconds: CoinConstants.adCooldownSeconds));
+    final next =
+        last.add(const Duration(seconds: CoinConstants.adCooldownSeconds));
     final now = DateTime.now().toUtc();
     if (now.isAfter(next) || now.isAtSameMomentAs(next)) {
       return Duration.zero;
@@ -111,20 +110,51 @@ class MonetizationService {
     return List<Map<String, dynamic>>.from(data as List);
   }
 
-  /// পরে: AppLovin + SSV Edge Function
-  Future<int> claimAdReward() async {
-    throw UnimplementedError(
-      'AppLovin MAX + Supabase Edge Function (SSV) পরে যুক্ত করুন',
+  /// Secure unlock via Supabase RPC
+  Future<Map<String, dynamic>> unlockContent({
+    required String type, // 'story' | 'episode'
+    required String refId,
+    required int amount,
+  }) async {
+    final res = await _client.rpc(
+      'spend_unlock',
+      params: {
+        'p_type': type,
+        'p_ref_id': refId,
+        'p_amount': amount,
+      },
     );
+    if (res is Map) {
+      return Map<String, dynamic>.from(res);
+    }
+    return {'ok': true};
   }
 
-  /// পরে: secure RPC
+  /// Reader screens call this
   Future<void> spendCoins({
     required String type,
     required int amount,
     String? refType,
     String? refId,
   }) async {
-    throw UnimplementedError('Secure spend RPC পরে যুক্ত করুন');
+    if (refId == null || refType == null) {
+      throw Exception('refType ও refId লাগবে');
+    }
+    final kind = refType == 'story' ? 'story' : 'episode';
+    final result = await unlockContent(
+      type: kind,
+      refId: refId,
+      amount: amount,
+    );
+    if (result['ok'] != true) {
+      throw Exception('আনলক ব্যর্থ');
+    }
+  }
+
+  /// পরে: AppLovin + SSV
+  Future<int> claimAdReward() async {
+    throw UnimplementedError(
+      'AppLovin MAX + SSV পরে যুক্ত করুন',
+    );
   }
 }
