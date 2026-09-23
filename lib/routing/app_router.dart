@@ -23,6 +23,7 @@ import '../features/offline/presentation/screens/offline_downloads_screen.dart';
 import '../features/admin/presentation/screens/admin_dashboard_screen.dart';
 import '../features/wallet/presentation/screens/earn_wallet_screen.dart';
 import '../features/wallet/presentation/screens/writer_earnings_screen.dart';
+import '../features/wallet/presentation/screens/withdraw_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -158,6 +159,11 @@ final appRouter = GoRouter(
       path: '/writer-earnings',
       name: 'writer-earnings',
       builder: (context, state) => const WriterEarningsScreen(),
+    ),
+    GoRoute(
+      path: '/withdraw',
+      name: 'withdraw',
+      builder: (context, state) => const WithdrawScreen(),
     ),
   ],
 );
