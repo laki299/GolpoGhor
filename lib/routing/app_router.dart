@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../features/auth/presentation/screens/login_screen.dart';
 import '../features/auth/presentation/screens/register_screen.dart';
-import '../features/home/presentation/screens/home_feed_screen.dart';
+import '../features/home/presentation/screens/home_shell_screen.dart';
 import '../features/story/presentation/screens/story_reader_screen.dart';
 import '../features/story/presentation/screens/create_story_screen.dart';
 import '../features/story/presentation/screens/edit_story_screen.dart';
@@ -40,7 +40,7 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/',
       name: 'home',
-      builder: (context, state) => const HomeFeedScreen(),
+      builder: (context, state) => const HomeShellScreen(),
     ),
     GoRoute(
       path: '/login',
