@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/models/content_block_model.dart';
 import '../../../../core/services/story_service.dart';
-import '../../../../core/services/storage_service.dart';
+import '../../../../core/services/r2_storage_service.dart';
 import '../../../../core/theme/app_colors.dart';
 
 class CreateStoryScreen extends ConsumerStatefulWidget {
@@ -29,7 +29,7 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
   bool _imageInserted = false;
 
   final _storyService = StoryService();
-  final _storageService = StorageService();
+  final _r2Storage = R2StorageService();
   final _picker = ImagePicker();
 
   @override
@@ -104,7 +104,11 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
     try {
       String? imageUrl;
       if (_selectedImage != null) {
-        imageUrl = await _storageService.uploadStoryImage(_selectedImage!);
+        // কম্প্রেস + আপলোড (R2 কনফিগ না থাকলে Supabase fallback)
+        imageUrl = await _r2Storage.uploadImage(
+          file: _selectedImage!,
+          folder: 'stories',
+        );
       }
 
       final blocks = _buildBlocks(imageUrl: imageUrl);
@@ -220,8 +224,6 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
-            // ছবির আগের লেখা
             TextFormField(
               controller: _contentBeforeController,
               maxLines: null,
@@ -236,7 +238,6 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
                 focusedBorder: InputBorder.none,
               ),
             ),
-
             if (_imageInserted && _selectedImage != null) ...[
               const SizedBox(height: 12),
               Stack(
@@ -258,7 +259,8 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
                       radius: 16,
                       child: IconButton(
                         padding: EdgeInsets.zero,
-                        icon: const Icon(Icons.close, color: Colors.white, size: 18),
+                        icon: const Icon(Icons.close,
+                            color: Colors.white, size: 18),
                         onPressed: _removeImage,
                       ),
                     ),
@@ -266,7 +268,7 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              Text(
+              const Text(
                 '↑ ছবি এখানে (আগের ও পরের লেখার মাঝে)',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: AppColors.primary),
@@ -298,7 +300,8 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
               Text(
                 '• আগে লিখে ছবি দিলে → ছবি মাঝে\n'
                 '• শুধু ছবি দিলে → ছবি শুরুতে\n'
-                '• লেখা শেষে ছবি দিলে → ছবি শেষে',
+                '• লেখা শেষে ছবি দিলে → ছবি শেষে\n'
+                '• আপলোডের আগে ছবি স্বয়ংক্রিয় কম্প্রেস হয়',
                 style: TextStyle(
                   fontSize: 12,
                   color: isDark
