@@ -3,7 +3,7 @@ class SupabaseConstants {
   static const String supabaseAnonKey =
       'sb_publishable_SUBENWVOAfriBPFChyohYQ_arFgqRKf';
 
-  // Core tables
+  // Table Names
   static const String profiles = 'profiles';
   static const String stories = 'stories';
   static const String novels = 'novels';
@@ -21,12 +21,12 @@ class SupabaseConstants {
   static const String adWatchLog = 'ad_watch_log';
   static const String withdrawRequests = 'withdraw_requests';
 
-  // Media (audio / video)
+  // Media (audio / video feeds)
   static const String audioPosts = 'audio_posts';
   static const String videoPosts = 'video_posts';
   static const String mediaUnlocks = 'media_unlocks';
   static const String mediaPlayCharges = 'media_play_charges';
 
-  // Legacy Supabase storage (optional; images will move to R2)
+  // Storage bucket — Supabase-এ যে নাম, সেটাই রাখো
   static const String storyImagesBucket = 'story_images';
 }
