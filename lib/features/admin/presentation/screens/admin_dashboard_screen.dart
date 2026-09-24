@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/services/admin_service.dart';
 import '../../../../core/services/monetization_service.dart';
 import '../../../../core/services/withdraw_service.dart';
+import '../../../../core/services/media_service.dart';
 import '../../../../core/models/story_model.dart';
 import '../../../../core/models/novel_model.dart';
 import '../../../../core/models/user_model.dart';
@@ -20,11 +21,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   final _adminService = AdminService();
   final _monetization = MonetizationService();
   final _withdrawService = WithdrawService();
+  final _mediaService = MediaService();
   late TabController _tabController;
 
   bool _isLoading = true;
   bool _isAdmin = false;
   bool _monetizationOn = false;
+  bool _audioFeedOn = false;
+  bool _videoFeedOn = false;
   Map<String, int> _stats = {};
   List<StoryModel> _stories = [];
   List<NovelModel> _novels = [];
@@ -55,6 +59,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     }
 
     final mono = await _monetization.isMonetizationEnabled();
+    final audioOn = await _mediaService.isAudioFeedEnabled();
+    final videoOn = await _mediaService.isVideoFeedEnabled();
     final stats = await _adminService.getStats();
     final stories = await _adminService.getAllStories();
     final novels = await _adminService.getAllNovels();
@@ -64,6 +70,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     setState(() {
       _isAdmin = true;
       _monetizationOn = mono;
+      _audioFeedOn = audioOn;
+      _videoFeedOn = videoOn;
       _stats = stats;
       _stories = stories;
       _novels = novels;
@@ -203,6 +211,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           activeColor: AppColors.primary,
           onChanged: _toggleMonetization,
         ),
+        SwitchListTile(
+          title: const Text('অডিও ফিড'),
+          subtitle: Text(
+            _audioFeedOn ? 'চালু — হোমে অডিও ট্যাব' : 'বন্ধ — ট্যাব লুকানো',
+          ),
+          value: _audioFeedOn,
+          activeColor: AppColors.primary,
+          onChanged: (v) async {
+            await _mediaService.setAudioFeedEnabled(v);
+            setState(() => _audioFeedOn = v);
+          },
+        ),
+        SwitchListTile(
+          title: const Text('ভিডিও ফিড'),
+          subtitle: Text(
+            _videoFeedOn ? 'চালু — হোমে ভিডিও ট্যাব' : 'বন্ধ — ট্যাব লুকানো',
+          ),
+          value: _videoFeedOn,
+          activeColor: AppColors.primary,
+          onChanged: (v) async {
+            await _mediaService.setVideoFeedEnabled(v);
+            setState(() => _videoFeedOn = v);
+          },
+        ),
         const Divider(height: 24),
         Wrap(
           spacing: 12,
@@ -222,7 +254,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         const SizedBox(height: 24),
         Text(
           'মডারেশন: গল্প/উপন্যাস ট্যাব থেকে আনপাবলিশ বা ডিলিট।\n'
-          'উইথড্র ট্যাব থেকে লেখকের রিকোয়েস্ট অনুমোদন/বাতিল।',
+          'উইথড্র ট্যাব থেকে লেখকের রিকোয়েস্ট অনুমোদন/বাতিল।\n'
+          'অডিও/ভিডিও বন্ধ রাখলে ডেটা থাকে, শুধু ফিড লুকানো থাকে।',
           style: TextStyle(
             fontSize: 13,
             color: isDark
@@ -312,7 +345,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         final s = _stories[index];
         return Card(
           child: ListTile(
-            title: Text(s.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+            title:
+                Text(s.title, style: const TextStyle(fontWeight: FontWeight.w600)),
             subtitle: Text(
               '${s.authorName ?? "অজানা"} • ${s.isPublished ? "প্রকাশিত" : "খসড়া"}',
             ),
@@ -352,8 +386,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         final n = _novels[index];
         return Card(
           child: ListTile(
-            title: Text(n.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: Text('${n.authorName ?? "অজানা"} • ${n.episodeCount} পর্ব'),
+            title:
+                Text(n.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle:
+                Text('${n.authorName ?? "অজানা"} • ${n.episodeCount} পর্ব'),
             trailing: PopupMenuButton<String>(
               onSelected: (v) async {
                 if (v == 'unpublish') {
@@ -388,6 +424,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final u = _users[index];
+        final handle =
+            u.username != null ? '@${u.username}' : u.id;
         return Card(
           child: ListTile(
             leading: CircleAvatar(
@@ -401,9 +439,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ),
             ),
             title: Text(u.fullName ?? 'নাম নেই'),
-            subtitle: Text(
-              '\( {u.username != null ? "@ \){u.username}" : u.id} • ${u.coins} কয়েন',
-            ),
+            subtitle: Text('$handle • ${u.coins} কয়েন'),
             trailing: u.isAdmin
                 ? const Chip(
                     label: Text('Admin', style: TextStyle(fontSize: 11)),
