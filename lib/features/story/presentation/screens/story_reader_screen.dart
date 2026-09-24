@@ -15,6 +15,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../social/presentation/widgets/reaction_picker.dart';
 import '../../../social/presentation/widgets/comment_section.dart';
 import '../../../wallet/presentation/widgets/unlock_paywall.dart';
+import '../../../wallet/presentation/widgets/earn_coins_popup.dart';
 
 class StoryReaderScreen extends ConsumerStatefulWidget {
   final String storyId;
@@ -114,15 +115,20 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
         refType: 'story',
         refId: widget.storyId,
       );
-      setState(() => _hasAccess = true);
-    } catch (_) {
+      final coins = await _monetization.getMyCoins();
       if (mounted) {
+        setState(() {
+          _hasAccess = true;
+          _userCoins = coins;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      if (EarnCoinsPopup.isInsufficientError(e)) {
+        await EarnCoinsPopup.show(context);
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'কয়েন কাটার সার্ভার এখনো যুক্ত হয়নি। মনিটাইজেশন OFF রাখুন অথবা পরে RPC যোগ করুন।',
-            ),
-          ),
+          SnackBar(content: Text('আনলক সমস্যা: $e')),
         );
       }
     }
@@ -147,8 +153,11 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
           setState(() {
             _userReaction = _userReaction == type ? null : type;
           });
-        } catch (_) {
-          if (mounted) {
+        } catch (e) {
+          if (!mounted) return;
+          if (EarnCoinsPopup.isInsufficientError(e)) {
+            await EarnCoinsPopup.show(context);
+          } else {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('রিয়্যাকশন দিতে সমস্যা হয়েছে')),
             );
@@ -423,7 +432,8 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
                               onPressed: _toggleFollow,
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppColors.primary,
-                                side: const BorderSide(color: AppColors.primary),
+                                side:
+                                    const BorderSide(color: AppColors.primary),
                                 padding:
                                     const EdgeInsets.symmetric(horizontal: 14),
                                 shape: RoundedRectangleBorder(
