@@ -163,12 +163,13 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final body = _buildBody(isDark);
 
+    // Shell-এর ভিতরে: শুধু body
     if (widget.embedded) {
-      return body;
+      return _buildBody(isDark);
     }
 
+    // আলাদা রুট হলে পুরো Scaffold
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -186,7 +187,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
           ),
         ],
       ),
-      body: body,
+      body: _buildBody(isDark),
       floatingActionButton: FloatingActionButton(
         onPressed: _showCreateSheet,
         backgroundColor: AppColors.primary,
