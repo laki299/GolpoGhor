@@ -311,8 +311,7 @@ class _StoryReaderScreenState extends ConsumerState<StoryReaderScreen> {
               : _buildBottomBar(isDark),
     );
   }
-
-  Widget _buildBody(bool isDark) {
+    Widget _buildBody(bool isDark) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
