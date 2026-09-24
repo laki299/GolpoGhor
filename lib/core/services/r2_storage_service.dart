@@ -4,13 +4,12 @@ import '../constants/r2_constants.dart';
 import '../constants/supabase_constants.dart';
 import 'media_compress_service.dart';
 
-/// এখন: ছবি কম্প্রেস করে Supabase bucket-এ (fallback)।
-/// R2 কনফিগ থাকলে পরে একই API দিয়ে R2-তে পাঠাবে।
+/// এখন: ছবি কম্প্রেস → Supabase fallback।
+/// R2 কনফিগ + PutObject → ল্যাপটপ ধাপ।
 class R2StorageService {
   final _compress = MediaCompressService();
   final _client = Supabase.instance.client;
 
-  /// ছবি আপলোড — আগে কম্প্রেস
   Future<String> uploadImage({
     required File file,
     required String folder, // stories | avatars | covers
@@ -22,14 +21,12 @@ class R2StorageService {
     );
 
     if (R2Constants.isConfigured) {
-      // TODO (ল্যাপটপ): AWS S3-compatible PUT to R2
       throw UnimplementedError(
-        'R2 কনফিগ আছে কিন্তু আপলোড ইমপ্লিমেন্ট ল্যাপটপে শেষ হবে। '
+        'R2 আপলোড ল্যাপটপে শেষ হবে। '
         'এখন isConfigured false রেখে Supabase path ব্যবহার করুন।',
       );
     }
 
-    // Fallback: Supabase storage
     final uid = _client.auth.currentUser?.id ?? 'anon';
     final name =
         '$folder/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
