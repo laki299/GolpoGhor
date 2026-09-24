@@ -1,14 +1,22 @@
-/// Cloudflare R2 — পরে Account/Bucket/Key দিয়ে পূরণ করো।
-/// এখন খালি রাখলে অ্যাপ ক্র্যাশ করবে না; আপলোড শুধু R2 কনফিগ থাকলে চালু হবে।
+/// Cloudflare R2 — Access/Secret শুধু ল্যাপটপে dart-define দিয়ে দাও।
+/// খালি key → isConfigured = false → Supabase fallback (নিরাপদ)।
 class R2Constants {
-  static const String accountId = ''; // e.g. abc123
-  static const String bucketName = 'golpoghor-media';
-  static const String accessKeyId = '';
-  static const String secretAccessKey = '';
+  static const String accountId = '3ebf1d5c6799bd3a8c2e0a710f2b72bc';
+  static const String bucketName = 'golpoghor';
 
-  /// Public base URL (R2.dev or custom domain), without trailing slash
-  /// e.g. https://pub-xxxxx.r2.dev  or  https://media.golpoghor.com
-  static const String publicBaseUrl = '';
+  /// GitHub-এ কমিট করো না — ল্যাপটপে:
+  /// --dart-define=R2_ACCESS_KEY=... --dart-define=R2_SECRET_KEY=...
+  static const String accessKeyId = String.fromEnvironment(
+    'R2_ACCESS_KEY',
+    defaultValue: '',
+  );
+  static const String secretAccessKey = String.fromEnvironment(
+    'R2_SECRET_KEY',
+    defaultValue: '',
+  );
+
+  static const String publicBaseUrl =
+      'https://pub-09f1cd9fdced4119ab588b1a4cfc9575.r2.dev';
 
   static bool get isConfigured =>
       accountId.isNotEmpty &&
@@ -16,6 +24,6 @@ class R2Constants {
       secretAccessKey.isNotEmpty &&
       publicBaseUrl.isNotEmpty;
 
-  static String endpoint =>
+  static String get endpoint =>
       'https://$accountId.r2.cloudflarestorage.com';
 }
