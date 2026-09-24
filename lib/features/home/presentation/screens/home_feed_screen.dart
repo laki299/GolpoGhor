@@ -11,7 +11,10 @@ import '../widgets/story_card.dart';
 import '../widgets/novel_card.dart';
 
 class HomeFeedScreen extends ConsumerStatefulWidget {
-  const HomeFeedScreen({super.key});
+  /// true = HomeShell-এর ভিতরে (নিজের AppBar/FAB নেই)
+  final bool embedded;
+
+  const HomeFeedScreen({super.key, this.embedded = false});
 
   @override
   ConsumerState<HomeFeedScreen> createState() => _HomeFeedScreenState();
@@ -89,8 +92,10 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
 
       final combined = <dynamic>[...stories, ...novels];
       combined.sort((a, b) {
-        final aDate = a is StoryModel ? a.createdAt : (a as NovelModel).createdAt;
-        final bDate = b is StoryModel ? b.createdAt : (b as NovelModel).createdAt;
+        final aDate =
+            a is StoryModel ? a.createdAt : (a as NovelModel).createdAt;
+        final bDate =
+            b is StoryModel ? b.createdAt : (b as NovelModel).createdAt;
         return bDate.compareTo(aDate);
       });
 
@@ -126,9 +131,43 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     }
   }
 
+  void _showCreateSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.article_outlined),
+              title: const Text('নতুন গল্প লিখুন'),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push('/create-story');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.menu_book_outlined),
+              title: const Text('নতুন উপন্যাস শুরু করুন'),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push('/create-novel');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final body = _buildBody(isDark);
+
+    if (widget.embedded) {
+      return body;
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -147,36 +186,9 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
           ),
         ],
       ),
-      body: _buildBody(isDark),
+      body: body,
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            builder: (ctx) => SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.article_outlined),
-                    title: const Text('নতুন গল্প লিখুন'),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      context.push('/create-story');
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.menu_book_outlined),
-                    title: const Text('নতুন উপন্যাস শুরু করুন'),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      context.push('/create-novel');
-                    },
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+        onPressed: _showCreateSheet,
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.edit, color: Colors.white),
       ),
