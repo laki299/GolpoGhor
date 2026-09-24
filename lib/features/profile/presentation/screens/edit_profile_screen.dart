@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/models/user_model.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/r2_storage_service.dart';
 import '../../../../core/services/storage_service.dart';
 import '../../../../core/theme/app_colors.dart';
 
@@ -23,6 +24,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _bioController = TextEditingController();
 
   final _authService = AuthService();
+  final _r2Storage = R2StorageService();
   final _storageService = StorageService();
   final _picker = ImagePicker();
 
@@ -80,7 +82,23 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       String? avatarUrl = _profile?.avatarUrl;
 
       if (_newAvatar != null) {
-        avatarUrl = await _storageService.uploadStoryImage(_newAvatar!);
+        // কম্প্রেস + আপলোড
+        avatarUrl = await _r2Storage.uploadImage(
+          file: _newAvatar!,
+          folder: 'avatars',
+          isAvatar: true,
+        );
+
+        // পুরনো Supabase স্টোরেজ URL হলে ডিলিট
+        final old = _profile?.avatarUrl;
+        if (old != null &&
+            old.isNotEmpty &&
+            old.contains('supabase') &&
+            old != avatarUrl) {
+          try {
+            await _storageService.deleteImage(old);
+          } catch (_) {}
+        }
       }
 
       await _authService.updateProfile(
@@ -96,7 +114,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('প্রোফাইল আপডেট হয়েছে')),
         );
-        context.pop(true); // true পাঠালে আগের স্ক্রিন রিফ্রেশ করতে পারবে
+        context.pop(true);
       }
     } catch (e) {
       if (mounted) {
@@ -147,7 +165,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // Avatar
             Center(
               child: Stack(
                 children: [
@@ -195,8 +212,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 8),
+            Center(
+              child: Text(
+                'নতুন ছবি সেভ করলে আগের ছবি মুছে যাবে • অটো কম্প্রেস',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark
+                      ? AppColors.darkTextSecondary
+                      : AppColors.lightTextSecondary,
+                ),
+              ),
+            ),
             const SizedBox(height: 32),
-
             TextFormField(
               controller: _nameController,
               decoration: const InputDecoration(
@@ -207,7 +235,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   (v == null || v.trim().isEmpty) ? 'নাম আবশ্যক' : null,
             ),
             const SizedBox(height: 16),
-
             TextFormField(
               controller: _usernameController,
               decoration: const InputDecoration(
@@ -221,7 +248,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               },
             ),
             const SizedBox(height: 16),
-
             TextFormField(
               controller: _bioController,
               maxLines: 3,
