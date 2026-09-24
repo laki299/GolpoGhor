@@ -23,17 +23,17 @@ class R2StorageService {
 
     if (R2Constants.isConfigured) {
       // TODO (ল্যাপটপ): AWS S3-compatible PUT to R2
-      // return public URL from R2Constants.publicBaseUrl
       throw UnimplementedError(
         'R2 কনফিগ আছে কিন্তু আপলোড ইমপ্লিমেন্ট ল্যাপটপে শেষ হবে। '
         'এখন isConfigured false রেখে Supabase path ব্যবহার করুন।',
       );
     }
 
-    // Fallback: existing Supabase storage
+    // Fallback: Supabase storage
     final uid = _client.auth.currentUser?.id ?? 'anon';
     final name =
-        '$folder/\( uid/ \){DateTime.now().millisecondsSinceEpoch}.jpg';
+        '$folder/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
+
     await _client.storage.from(SupabaseConstants.storyImagesBucket).upload(
           name,
           compressed,
@@ -42,28 +42,24 @@ class R2StorageService {
             contentType: 'image/jpeg',
           ),
         );
+
     return _client.storage
         .from(SupabaseConstants.storyImagesBucket)
         .getPublicUrl(name);
   }
 
   Future<String> uploadAudio({required File file}) async {
-    final prepared = await _compress.prepareAudioFile(file);
+    await _compress.prepareAudioFile(file);
     if (!R2Constants.isConfigured) {
-      throw Exception(
-        'অডিও আপলোডের জন্য R2 কনফিগ লাগবে (পরে)।',
-      );
+      throw Exception('অডিও আপলোডের জন্য R2 কনফিগ লাগবে (পরে)।');
     }
-    // TODO R2 PUT
     throw UnimplementedError('R2 audio upload — ল্যাপটপ ধাপ');
   }
 
   Future<String> uploadVideo({required File file}) async {
-    final prepared = await _compress.prepareVideoFile(file);
+    await _compress.prepareVideoFile(file);
     if (!R2Constants.isConfigured) {
-      throw Exception(
-        'ভিডিও আপলোডের জন্য R2 কনফিগ লাগবে (পরে)।',
-      );
+      throw Exception('ভিডিও আপলোডের জন্য R2 কনফিগ লাগবে (পরে)।');
     }
     throw UnimplementedError('R2 video upload — ল্যাপটপ ধাপ');
   }
