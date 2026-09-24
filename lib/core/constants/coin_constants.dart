@@ -7,7 +7,7 @@ class CoinConstants {
   static const int comment = 2;
   static const int adCooldownSeconds = 60;
 
-  /// Media (default; server may override via app_settings media_rates)
+  /// অডিও/ভিডিও — প্রতি ৫ সেকেন্ডে
   static const int audioPer5Seconds = 3;
   static const int videoPer5Seconds = 30;
 }
