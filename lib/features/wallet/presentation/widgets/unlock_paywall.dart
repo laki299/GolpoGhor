@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import 'earn_coins_popup.dart';
 
 class UnlockPaywall extends StatelessWidget {
   final String title;
@@ -30,7 +31,8 @@ class UnlockPaywall extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.lock_outline, size: 48, color: AppColors.primary),
+                const Icon(Icons.lock_outline,
+                    size: 48, color: AppColors.primary),
                 const SizedBox(height: 16),
                 Text(
                   title,
@@ -61,9 +63,15 @@ class UnlockPaywall extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: canAfford ? onUnlockPressed : null,
+                    onPressed: () {
+                      if (canAfford) {
+                        onUnlockPressed();
+                      } else {
+                        EarnCoinsPopup.show(context);
+                      }
+                    },
                     child: Text(
-                      canAfford ? '$cost কয়েন দিয়ে খুলুন' : 'কয়েন কম আছে',
+                      canAfford ? '$cost কয়েন দিয়ে খুলুন' : 'কয়েন কম — বিজ্ঞাপন দেখুন',
                     ),
                   ),
                 ),
