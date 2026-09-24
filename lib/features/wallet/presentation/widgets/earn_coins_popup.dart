@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 
-/// কয়েন শর্ট হলে সব জায়গায় এই পপআপ।
 class EarnCoinsPopup {
   static Future<void> show(
     BuildContext context, {
@@ -10,7 +9,6 @@ class EarnCoinsPopup {
   }) {
     return showDialog(
       context: context,
-      barrierDismissible: true,
       builder: (ctx) => AlertDialog(
         title: const Text('কয়েন কম আছে'),
         content: Text(
@@ -38,11 +36,11 @@ class EarnCoinsPopup {
     );
   }
 
-  /// RPC/Exception থেকে "Insufficient" ধরলে true
   static bool isInsufficientError(Object e) {
     final s = e.toString().toLowerCase();
     return s.contains('insufficient') ||
-        s.contains('কয়েন') && s.contains('কম') ||
-        s.contains('not enough');
+        s.contains('কয়েন') ||
+        s.contains('not enough') ||
+        s.contains('balance');
   }
 }
