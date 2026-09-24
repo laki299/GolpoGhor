@@ -13,8 +13,7 @@ class StorageService {
   Future<String> uploadStoryImage(File file) async {
     final compressed = await _compress.compressImageFile(file);
     final uid = _client.auth.currentUser?.id ?? 'anon';
-    final path =
-        'stories/\( uid/ \){DateTime.now().millisecondsSinceEpoch}.jpg';
+    final path = 'stories/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
 
     await _client.storage.from(_bucket).upload(
           path,
@@ -38,8 +37,7 @@ class StorageService {
       isAvatar: true,
     );
     final uid = _client.auth.currentUser?.id ?? 'anon';
-    final path =
-        'avatars/\( uid/ \){DateTime.now().millisecondsSinceEpoch}.jpg';
+    final path = 'avatars/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
 
     await _client.storage.from(_bucket).upload(
           path,
@@ -68,7 +66,6 @@ class StorageService {
     try {
       final uri = Uri.parse(imageUrl);
       final segments = uri.pathSegments;
-      // .../object/public/story_images/<path>
       final idx = segments.indexOf(_bucket);
       if (idx < 0 || idx >= segments.length - 1) return;
       final objectPath = segments.sublist(idx + 1).join('/');
