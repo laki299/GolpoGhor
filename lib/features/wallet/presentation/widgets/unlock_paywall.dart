@@ -31,8 +31,11 @@ class UnlockPaywall extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.lock_outline,
-                    size: 48, color: AppColors.primary),
+                const Icon(
+                  Icons.lock_outline,
+                  size: 48,
+                  color: AppColors.primary,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   title,
@@ -71,7 +74,9 @@ class UnlockPaywall extends StatelessWidget {
                       }
                     },
                     child: Text(
-                      canAfford ? '$cost কয়েন দিয়ে খুলুন' : 'কয়েন কম — বিজ্ঞাপন দেখুন',
+                      canAfford
+                          ? '$cost কয়েন দিয়ে খুলুন'
+                          : 'কয়েন কম — বিজ্ঞাপন দেখুন',
                     ),
                   ),
                 ),
